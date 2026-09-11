@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CalendarClock, PencilLine, RefreshCw, UserRoundCheck } from "lucide-react";
+import { useScouterSession } from "@/components/scouter-session";
 import type { TbaMatch } from "@/types/frc";
 
 type Station = "red1" | "red2" | "red3" | "blue1" | "blue2" | "blue3";
@@ -41,7 +42,7 @@ function scoutingForm() {
 function identitySection(form: HTMLFormElement) {
   return Array.from(form.querySelectorAll("section")).find((section) => {
     const labels = Array.from(section.querySelectorAll("label > span")).map((span) => span.textContent?.trim());
-    return labels.includes("Event key") && labels.includes("Match") && labels.includes("Team") && labels.includes("Scout") && labels.includes("Alliance");
+    return labels.includes("Event key") && labels.includes("Match") && labels.includes("Team") && labels.includes("Alliance");
   });
 }
 
@@ -61,8 +62,8 @@ function setControlValue(control: HTMLInputElement | HTMLSelectElement | null, v
 }
 
 export function ScoutingAssignmentPanel() {
+  const { session } = useScouterSession();
   const [eventKey, setEventKey] = useState("");
-  const [scoutName, setScoutName] = useState("");
   const [station, setStation] = useState<Station>("red1");
   const [matches, setMatches] = useState<TbaMatch[]>([]);
   const [loading, setLoading] = useState(false);
@@ -74,10 +75,9 @@ export function ScoutingAssignmentPanel() {
     try {
       const raw = window.localStorage.getItem(PREFS_KEY);
       if (!raw) return;
-      const prefs = JSON.parse(raw) as { eventKey?: string; scoutName?: string; station?: Station };
+      const prefs = JSON.parse(raw) as { eventKey?: string; station?: Station };
       const savedEvent = prefs.eventKey ?? "";
       setEventKey(savedEvent);
-      setScoutName(prefs.scoutName ?? "");
       setStation(stations.some((item) => item.value === prefs.station) ? prefs.station! : "red1");
       if (savedEvent) {
         const cached = window.localStorage.getItem(`${CACHE_PREFIX}${savedEvent.toLowerCase()}`);
@@ -89,9 +89,9 @@ export function ScoutingAssignmentPanel() {
   }, []);
 
   useEffect(() => {
-    if (!eventKey && !scoutName) return;
-    window.localStorage.setItem(PREFS_KEY, JSON.stringify({ eventKey, scoutName, station }));
-  }, [eventKey, scoutName, station]);
+    if (!eventKey) return;
+    window.localStorage.setItem(PREFS_KEY, JSON.stringify({ eventKey, station }));
+  }, [eventKey, station]);
 
   useEffect(() => {
     const form = scoutingForm();
@@ -147,11 +147,6 @@ export function ScoutingAssignmentPanel() {
   }
 
   function loadAssignment(match: TbaMatch) {
-    if (!scoutName.trim()) {
-      setMessage("Enter the scout name before loading an assignment.");
-      return;
-    }
-
     const team = teamNumber(match.alliances[stationInfo.alliance].team_keys[stationInfo.index]);
     if (!team) {
       setMessage(`No team is listed for ${stationInfo.label} in Q${match.match_number}.`);
@@ -167,7 +162,6 @@ export function ScoutingAssignmentPanel() {
     setControlValue(controlFor(form, "Event key"), eventKey.trim().toLowerCase());
     setControlValue(controlFor(form, "Match"), String(match.match_number));
     setControlValue(controlFor(form, "Team"), String(team));
-    setControlValue(controlFor(form, "Scout"), scoutName.trim());
     setControlValue(controlFor(form, "Alliance"), stationInfo.alliance);
 
     setManualEntry(false);
@@ -176,7 +170,7 @@ export function ScoutingAssignmentPanel() {
       teamNumber: team,
       stationLabel: stationInfo.label,
       alliance: stationInfo.alliance,
-      scoutName: scoutName.trim(),
+      scoutName: session.name,
     });
     setMessage(null);
     form.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -196,49 +190,48 @@ export function ScoutingAssignmentPanel() {
   }
 
   return (
-    <section className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/85 p-5 sm:p-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <div className="flex items-center gap-2 text-[#ffd84d]"><UserRoundCheck size={18} /><span className="text-xs font-semibold uppercase tracking-[0.18em]">Scout station</span></div>
-          <h2 className="mt-2 text-xl font-semibold text-white">Match assignment loader</h2>
-          <p className="mt-1 max-w-3xl text-sm text-slate-500">Choose the scout and physical station once. Then tap the match you are scouting; the form is filled automatically.</p>
+    <section className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/85 p-4 sm:p-6">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-[#ffd84d]"><UserRoundCheck size={18} /><span className="text-[11px] font-semibold uppercase tracking-[0.18em]">Scout station</span></div>
+          <h2 className="mt-1 text-lg font-semibold text-white sm:mt-2 sm:text-xl">Match assignment loader</h2>
+          <p className="mt-1 text-xs text-slate-500 sm:text-sm">Signed in as <span className="font-medium text-slate-300">{session.name}</span>. Choose a station once, then load each match with one tap.</p>
         </div>
-        <button type="button" onClick={toggleManualEntry} className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-300/20 px-3 py-2 text-xs font-semibold text-slate-300 hover:border-[#ffd84d]/50 hover:text-white">
-          <PencilLine size={14} /> {manualEntry ? "Use assignments" : "Edit manually"}
+        <button type="button" onClick={toggleManualEntry} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-blue-300/20 px-3 py-2 text-xs font-semibold text-slate-300 hover:border-[#ffd84d]/50 hover:text-white">
+          <PencilLine size={14} /> <span className="hidden sm:inline">{manualEntry ? "Use assignments" : "Edit manually"}</span><span className="sm:hidden">{manualEntry ? "Assignments" : "Manual"}</span>
         </button>
       </div>
 
-      <form onSubmit={loadSchedule} className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_180px_auto] md:items-end">
-        <label className="space-y-2 text-sm"><span className="font-medium text-slate-300">Event key</span><input value={eventKey} onChange={(event) => setEventKey(event.target.value)} placeholder="2026vaale" className={inputClass} /></label>
-        <label className="space-y-2 text-sm"><span className="font-medium text-slate-300">Scout name</span><input value={scoutName} onChange={(event) => setScoutName(event.target.value)} placeholder="Name" className={inputClass} /></label>
-        <label className="space-y-2 text-sm"><span className="font-medium text-slate-300">Station</span><select value={station} onChange={(event) => { setStation(event.target.value as Station); setCurrentAssignment(null); }} className={inputClass}>{stations.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-        <button type="submit" disabled={loading || !eventKey.trim()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0b5fff] px-4 py-2.5 font-semibold text-white hover:bg-blue-500 disabled:opacity-50"><RefreshCw size={16} className={loading ? "animate-spin" : ""} />{loading ? "Loading" : "Load schedule"}</button>
+      <form onSubmit={loadSchedule} className="mt-4 grid gap-3 sm:grid-cols-2 md:grid-cols-[1fr_180px_auto] md:items-end">
+        <label className="space-y-1.5 text-sm"><span className="font-medium text-slate-300">Event key</span><input value={eventKey} onChange={(event) => setEventKey(event.target.value)} placeholder="2026vaale" autoCapitalize="none" className={inputClass} /></label>
+        <label className="space-y-1.5 text-sm"><span className="font-medium text-slate-300">Station</span><select value={station} onChange={(event) => { setStation(event.target.value as Station); setCurrentAssignment(null); }} className={inputClass}>{stations.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+        <button type="submit" disabled={loading || !eventKey.trim()} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#0b5fff] px-4 py-2.5 font-semibold text-white hover:bg-blue-500 disabled:opacity-50 sm:col-span-2 md:col-span-1"><RefreshCw size={16} className={loading ? "animate-spin" : ""} />{loading ? "Loading" : "Load schedule"}</button>
       </form>
 
       {currentAssignment && !manualEntry ? (
-        <div className="mt-4 flex flex-col gap-2 rounded-xl border border-[#ffd84d]/30 bg-[#ffd84d]/8 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-[#ffd84d]/30 bg-[#ffd84d]/8 px-3 py-2.5 sm:mt-4 sm:px-4 sm:py-3">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#ffd84d]">Current assignment</div>
-            <div className="mt-1 text-lg font-semibold text-white">Q{currentAssignment.matchNumber} · Team {currentAssignment.teamNumber}</div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#ffd84d]">Current assignment</div>
+            <div className="mt-0.5 text-base font-semibold text-white sm:text-lg">Q{currentAssignment.matchNumber} · Team {currentAssignment.teamNumber}</div>
           </div>
-          <div className="text-sm text-slate-300">{currentAssignment.stationLabel} · {currentAssignment.scoutName}</div>
+          <div className="text-right text-xs text-slate-400 sm:text-sm">{currentAssignment.stationLabel}<br className="sm:hidden" /> <span className="hidden sm:inline">· </span>{currentAssignment.scoutName}</div>
         </div>
       ) : !manualEntry ? (
-        <div className="mt-4 rounded-xl border border-dashed border-blue-300/15 px-4 py-3 text-sm text-slate-500">Load a match below before entering scouting data. The duplicate match/team/alliance fields are hidden during normal scouting.</div>
+        <div className="mt-3 rounded-xl border border-dashed border-blue-300/15 px-3 py-2.5 text-xs text-slate-500 sm:mt-4 sm:px-4 sm:py-3 sm:text-sm">Load a match below before scouting. Match, team, and alliance fields stay hidden during normal assigned scouting.</div>
       ) : null}
 
-      {message ? <div className="mt-4 rounded-xl border border-yellow-300/15 bg-yellow-300/5 px-3 py-2 text-sm text-yellow-100">{message}</div> : null}
+      {message ? <div className="mt-3 rounded-xl border border-yellow-300/15 bg-yellow-300/5 px-3 py-2 text-sm text-yellow-100 sm:mt-4">{message}</div> : null}
 
       {qualificationMatches.length ? (
-        <div className="mt-5">
-          <div className="mb-3 flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-sm font-medium text-slate-300"><CalendarClock size={16} /> {stationInfo.label} assignments</div><div className="text-xs text-slate-600">{qualificationMatches.length} quals</div></div>
-          <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+        <div className="mt-4 sm:mt-5">
+          <div className="mb-2 flex items-center justify-between gap-3 sm:mb-3"><div className="flex items-center gap-2 text-sm font-medium text-slate-300"><CalendarClock size={16} /> {stationInfo.label} assignments</div><div className="text-xs text-slate-600">{qualificationMatches.length} quals</div></div>
+          <div className="max-h-[280px] space-y-2 overflow-y-auto pr-1 sm:max-h-[360px]">
             {qualificationMatches.map((match) => {
               const team = teamNumber(match.alliances[stationInfo.alliance].team_keys[stationInfo.index]);
               const completed = match.actual_time !== null;
               const selected = currentAssignment?.matchNumber === match.match_number && currentAssignment.teamNumber === team;
               return (
-                <button key={match.key} type="button" onClick={() => loadAssignment(match)} disabled={!team} className={`flex w-full items-center justify-between gap-4 rounded-xl border px-4 py-3 text-left transition ${selected ? "border-[#ffd84d]/50 bg-[#ffd84d]/10" : completed ? "border-blue-300/10 bg-[#07111f]/35" : "border-blue-300/20 bg-[#07111f]/70 hover:border-[#ffd84d]/45 hover:bg-[#0b5fff]/10"} disabled:opacity-40`}>
+                <button key={match.key} type="button" onClick={() => loadAssignment(match)} disabled={!team} className={`flex min-h-14 w-full touch-manipulation items-center justify-between gap-4 rounded-xl border px-4 py-3 text-left transition ${selected ? "border-[#ffd84d]/50 bg-[#ffd84d]/10" : completed ? "border-blue-300/10 bg-[#07111f]/35" : "border-blue-300/20 bg-[#07111f]/70 hover:border-[#ffd84d]/45 hover:bg-[#0b5fff]/10"} disabled:opacity-40`}>
                   <div><div className="font-semibold text-white">Q{match.match_number} <span className="mx-1 text-slate-700">·</span> <span className="text-[#ffd84d]">Team {team ?? "—"}</span></div><div className="mt-1 text-xs text-slate-500">{stationInfo.label} · {completed ? "match completed" : "ready to scout"}</div></div>
                   <span className="rounded-lg border border-blue-300/15 px-3 py-1.5 text-xs font-semibold text-slate-300">{selected ? "Loaded" : "Load"}</span>
                 </button>
@@ -247,10 +240,10 @@ export function ScoutingAssignmentPanel() {
           </div>
         </div>
       ) : (
-        <div className="mt-5 rounded-xl border border-dashed border-blue-300/15 p-4 text-sm text-slate-600">Load an event schedule to see this station&apos;s qualification assignments.</div>
+        <div className="mt-4 rounded-xl border border-dashed border-blue-300/15 p-3 text-sm text-slate-600 sm:mt-5 sm:p-4">Load an event schedule to see this station&apos;s qualification assignments.</div>
       )}
     </section>
   );
 }
 
-const inputClass = "w-full rounded-xl border border-blue-300/20 bg-[#07111f] px-3 py-2.5 text-white outline-none placeholder:text-slate-700 focus:border-[#0b5fff]";
+const inputClass = "min-h-12 w-full rounded-xl border border-blue-300/20 bg-[#07111f] px-3 py-2.5 text-base text-white outline-none placeholder:text-slate-700 focus:border-[#0b5fff]";
