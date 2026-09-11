@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Download, Save, Trash2 } from "lucide-react";
+import { AutoStartField } from "@/components/auto-start-field";
 import {
   getScoutingSeason,
   inferSeasonFromEventKey,
@@ -9,7 +10,9 @@ import {
   type GameField,
 } from "@/config/scouting/seasons";
 import type {
+  AllianceColor,
   DefenseLevel,
+  FieldPoint,
   MatchScoutingEntry,
   ScoutingValue,
   StoredScoutingEntry,
@@ -40,6 +43,8 @@ export function MatchScoutingForm() {
   const [matchNumber, setMatchNumber] = useState(1);
   const [teamNumber, setTeamNumber] = useState(1731);
   const [scoutName, setScoutName] = useState("");
+  const [alliance, setAlliance] = useState<AllianceColor>("red");
+  const [autoStart, setAutoStart] = useState<FieldPoint>({ x: 14, y: 50 });
   const [gameData, setGameData] = useState<Record<string, ScoutingValue>>(() => defaultGameData(config.fields));
   const [defense, setDefense] = useState<DefenseLevel>("none");
   const [penalties, setPenalties] = useState(0);
@@ -66,6 +71,7 @@ export function MatchScoutingForm() {
 
   useEffect(() => {
     setGameData(defaultGameData(config.fields));
+    setAutoStart({ x: 14, y: 50 });
   }, [config]);
 
   const recentEntries = useMemo(
@@ -102,6 +108,8 @@ export function MatchScoutingForm() {
       teamNumber,
       scoutName: scoutName.trim(),
       createdAt: new Date().toISOString(),
+      alliance,
+      autoStart: config.year === 2026 ? autoStart : undefined,
       gameData,
       defense,
       penalties,
@@ -117,6 +125,7 @@ export function MatchScoutingForm() {
     setMessage(`Saved ${config.year} Q${matchNumber} · Team ${teamNumber} locally.`);
     setMatchNumber((current) => current + 1);
     setGameData(defaultGameData(config.fields));
+    setAutoStart({ x: 14, y: 50 });
     setDefense("none");
     setPenalties(0);
     setDisabled(false);
@@ -161,6 +170,19 @@ export function MatchScoutingForm() {
           <Field label="Team"><input type="number" min={1} value={teamNumber} onChange={(event) => setTeamNumber(numberOrZero(event.target.value))} className={inputClass} /></Field>
           <Field label="Scout"><input value={scoutName} onChange={(event) => setScoutName(event.target.value)} placeholder="Name" className={inputClass} /></Field>
         </section>
+
+        {config.year === 2026 ? (
+          <AutoStartField
+            alliance={alliance}
+            position={autoStart}
+            onAllianceChange={setAlliance}
+            onPositionChange={setAutoStart}
+          />
+        ) : (
+          <section className="rounded-2xl border border-blue-300/10 bg-[#07111f]/45 p-4 text-sm text-slate-500">
+            Field start-position mapping is currently configured for 2026. The coordinate format is season-neutral, so historical maps can be added without changing the database.
+          </section>
+        )}
 
         {(["auto", "teleop", "endgame"] as const).map((phase) => {
           const fields = config.fields.filter((field) => field.phase === phase);
@@ -219,7 +241,7 @@ export function MatchScoutingForm() {
                 </div>
                 <button type="button" onClick={() => removeEntry(entry.id)} className="rounded-lg p-2 text-slate-500 hover:bg-red-950/30 hover:text-red-300" aria-label="Delete entry"><Trash2 size={16} /></button>
               </div>
-              <p className="mt-2 text-xs text-slate-500">{entry.eventKey}</p>
+              <p className="mt-2 text-xs text-slate-500">{entry.eventKey}{entry.schemaVersion === 2 && entry.alliance ? ` · ${entry.alliance.toUpperCase()} alliance` : ""}</p>
             </div>
           ))}</div>}
         </section>
