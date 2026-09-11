@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Download, Save, Trash2 } from "lucide-react";
+import { Cloud, CloudOff, Download, Save, Trash2 } from "lucide-react";
 import { useScouterSession } from "@/components/scouter-session";
 import {
   getScoutingSeason,
@@ -18,6 +18,17 @@ import type {
 } from "@/types/scouting";
 
 const STORAGE_KEY = "1731.match-scouting.entries.v1";
+const QUEUE_UPDATED_EVENT = "1731:scouting-queue-updated";
+const QUEUE_SYNCED_EVENT = "1731:scouting-queue-synced";
+
+function loadEntries(): StoredScoutingEntry[] {
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    return stored ? (JSON.parse(stored) as StoredScoutingEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 function numberOrZero(value: string) {
   const parsed = Number(value);
@@ -40,9 +51,9 @@ function defaultGameData(fields: GameField[]) {
 
 export function MatchScoutingForm() {
   const { session } = useScouterSession();
-  const [hydrated, setHydrated] = useState(false);
   const [entries, setEntries] = useState<StoredScoutingEntry[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(true);
   const [season, setSeason] = useState(2026);
   const config = getScoutingSeason(season);
   const [eventKey, setEventKey] = useState("");
@@ -61,20 +72,28 @@ export function MatchScoutingForm() {
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored) setEntries(JSON.parse(stored) as StoredScoutingEntry[]);
-    } catch {
-      setMessage("Saved scouting data could not be read on this device.");
-    } finally {
-      setHydrated(true);
-    }
-  }, []);
+    setEntries(loadEntries());
+    setIsOnline(navigator.onLine);
 
-  useEffect(() => {
-    if (!hydrated) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-  }, [entries, hydrated]);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    const handleSynced = () => setEntries(loadEntries());
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEY) setEntries(loadEntries());
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener(QUEUE_SYNCED_EVENT, handleSynced);
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener(QUEUE_SYNCED_EVENT, handleSynced);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
 
   useEffect(() => {
     setGameData(defaultGameData(config.fields));
@@ -84,6 +103,18 @@ export function MatchScoutingForm() {
     () => [...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 10),
     [entries],
   );
+
+  function persistEntries(next: StoredScoutingEntry[]) {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      setEntries(next);
+      window.dispatchEvent(new Event(QUEUE_UPDATED_EVENT));
+      return true;
+    } catch {
+      setMessage("This entry could not be saved on the device. Do not leave this page until storage is available.");
+      return false;
+    }
+  }
 
   function handleEventKey(value: string) {
     setEventKey(value);
@@ -143,7 +174,9 @@ export function MatchScoutingForm() {
       source: "manual",
     };
 
-    setEntries((current) => [...current, entry]);
+    const latest = loadEntries();
+    if (!persistEntries([...latest, entry])) return;
+
     setMessage(`Saved ${config.year} Q${resolvedMatchNumber} · Team ${resolvedTeamNumber} locally.`);
     setMatchNumber(resolvedMatchNumber + 1);
     setGameData(defaultGameData(config.fields));
@@ -159,11 +192,13 @@ export function MatchScoutingForm() {
   }
 
   function removeEntry(id: string) {
-    setEntries((current) => current.filter((entry) => entry.id !== id));
+    const latest = loadEntries();
+    persistEntries(latest.filter((entry) => entry.id !== id));
   }
 
   function exportEntries() {
-    const blob = new Blob([JSON.stringify(entries, null, 2)], { type: "application/json" });
+    const latest = loadEntries();
+    const blob = new Blob([JSON.stringify(latest, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -172,37 +207,52 @@ export function MatchScoutingForm() {
     URL.revokeObjectURL(url);
   }
 
+  const resolvedMatchLabel = matchNumber === "" ? "—" : matchNumber;
+  const resolvedTeamLabel = teamNumber === "" ? "—" : teamNumber;
+
   return (
-    <div className="grid gap-8 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
-      <form onSubmit={submit} className="space-y-6 rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/85 p-5 sm:p-6">
-        <section className="rounded-2xl border border-yellow-300/20 bg-yellow-300/5 p-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#ffd84d]">Season profile</div>
-              <h2 className="mt-1 text-2xl font-semibold text-white">{config.year} · {config.gameName}</h2>
-              <p className="mt-1 text-sm text-slate-400">{config.description}</p>
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)] xl:gap-8">
+      <form onSubmit={submit} className="space-y-4 rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/85 p-3 sm:space-y-6 sm:p-6">
+        <section className="rounded-2xl border border-yellow-300/20 bg-yellow-300/5 p-3 sm:p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#ffd84d]">Season profile</div>
+              <h2 className="mt-1 truncate text-lg font-semibold text-white sm:text-2xl">{config.year} · {config.gameName}</h2>
+              <p className="mt-1 hidden text-sm text-slate-400 sm:block">{config.description}</p>
             </div>
-            <select value={season} onChange={(event) => setSeason(Number(event.target.value))} className={`${inputClass} max-w-xs`}>
+            <select value={season} onChange={(event) => setSeason(Number(event.target.value))} className={`${inputClass} max-w-40 shrink-0 sm:max-w-xs`} aria-label="Scouting season">
               {scoutingSeasons.map((item) => <option key={item.year} value={item.year}>{item.year} · {item.gameName}</option>)}
             </select>
           </div>
         </section>
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Event key"><input value={eventKey} onChange={(event) => handleEventKey(event.target.value)} placeholder="2026vahay" className={inputClass} /></Field>
-          <Field label="Match"><input type="number" min={1} value={matchNumber} onChange={(event) => setMatchNumber(event.target.value === "" ? "" : numberOrZero(event.target.value))} className={inputClass} /></Field>
-          <Field label="Team"><input type="number" min={1} value={teamNumber} onChange={(event) => setTeamNumber(event.target.value === "" ? "" : numberOrZero(event.target.value))} className={inputClass} /></Field>
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label="Event key"><input value={eventKey} onChange={(event) => handleEventKey(event.target.value)} placeholder="2026vahay" autoCapitalize="none" className={inputClass} /></Field>
+          <Field label="Match"><input type="number" inputMode="numeric" min={1} value={matchNumber} onChange={(event) => setMatchNumber(event.target.value === "" ? "" : numberOrZero(event.target.value))} className={inputClass} /></Field>
+          <Field label="Team"><input type="number" inputMode="numeric" min={1} value={teamNumber} onChange={(event) => setTeamNumber(event.target.value === "" ? "" : numberOrZero(event.target.value))} className={inputClass} /></Field>
           <Field label="Alliance"><select value={alliance} onChange={(event) => setAlliance(event.target.value as AllianceColor)} className={inputClass}><option value="red">Red</option><option value="blue">Blue</option></select></Field>
         </section>
-        <p className="-mt-3 text-xs text-slate-500">Scouting as <span className="font-medium text-slate-300">{session.name}</span>. Use Switch user in the header to change scouters.</p>
+
+        <div className="sticky top-[68px] z-30 -mx-1 rounded-xl border border-blue-300/20 bg-[#081525]/95 px-3 py-2.5 shadow-lg shadow-black/20 backdrop-blur sm:top-[72px] sm:mx-0">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-white">Q{resolvedMatchLabel} · Team {resolvedTeamLabel} · <span className={alliance === "red" ? "text-red-300" : "text-blue-300"}>{alliance.toUpperCase()}</span></div>
+              <div className="truncate text-[11px] text-slate-500">{eventKey.trim().toLowerCase() || "event not set"} · {session.name}</div>
+            </div>
+            <div className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-semibold ${isOnline ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200" : "border-yellow-300/25 bg-yellow-300/10 text-yellow-100"}`}>
+              {isOnline ? <Cloud size={13} /> : <CloudOff size={13} />}
+              {isOnline ? "Online" : "Offline"}
+            </div>
+          </div>
+        </div>
 
         {(["auto", "teleop", "endgame"] as const).map((phase) => {
           const fields = config.fields.filter((field) => field.phase === phase);
           if (fields.length === 0) return null;
           return (
-            <section key={phase} className="rounded-2xl border border-blue-300/10 bg-[#07111f]/55 p-4">
-              <h2 className="mb-4 text-lg font-semibold capitalize text-[#ffd84d]">{phase}</h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <section key={phase} className="rounded-2xl border border-blue-300/10 bg-[#07111f]/55 p-3 sm:p-4">
+              <h2 className="mb-3 text-base font-semibold capitalize text-[#ffd84d] sm:mb-4 sm:text-lg">{phase}</h2>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 sm:gap-4">
                 {fields.map((field) => (
                   <GameFieldControl
                     key={field.key}
@@ -216,9 +266,9 @@ export function MatchScoutingForm() {
           );
         })}
 
-        <section className="rounded-2xl border border-blue-300/10 bg-[#07111f]/55 p-4">
-          <h2 className="mb-4 text-lg font-semibold text-[#ffd84d]">Driver & defense</h2>
-          <div className="grid gap-5 lg:grid-cols-3">
+        <section className="rounded-2xl border border-blue-300/10 bg-[#07111f]/55 p-3 sm:p-4">
+          <h2 className="mb-3 text-base font-semibold text-[#ffd84d] sm:mb-4 sm:text-lg">Driver & defense</h2>
+          <div className="grid gap-3 lg:grid-cols-3 lg:gap-5">
             <RatingSlider label="Driver rating" value={driverRating} onChange={setDriverRating} />
             <ChoiceGroup
               title="How guarded was this team?"
@@ -237,8 +287,8 @@ export function MatchScoutingForm() {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2">
-          <Field label="Penalties"><input type="number" min={0} value={penalties} onChange={(event) => setPenalties(event.target.value === "" ? "" : numberOrZero(event.target.value))} className={inputClass} /></Field>
+        <section className="grid gap-3 md:grid-cols-2 sm:gap-4">
+          <Field label="Penalties"><input type="number" inputMode="numeric" min={0} value={penalties} onChange={(event) => setPenalties(event.target.value === "" ? "" : numberOrZero(event.target.value))} className={inputClass} /></Field>
           <div className="grid gap-2 sm:grid-cols-3">
             <Check label="Disabled" checked={disabled} onChange={setDisabled} />
             <Check label="Tipped" checked={tipped} onChange={setTipped} />
@@ -246,20 +296,23 @@ export function MatchScoutingForm() {
           </div>
         </section>
 
-        <Field label="Notes"><textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} placeholder="Strategy notes, unusual behavior, failure details…" className={`${inputClass} resize-y`} /></Field>
+        <Field label="Notes"><textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder="Strategy notes, unusual behavior, failure details…" className={`${inputClass} resize-y`} /></Field>
 
         {message ? <div className="rounded-xl border border-yellow-300/20 bg-yellow-300/5 p-3 text-sm text-yellow-100">{message}</div> : null}
 
-        <button type="submit" className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#ffd84d] px-5 py-3 font-semibold text-[#07111f] hover:bg-yellow-300 sm:w-auto"><Save size={18} /> Save scouting entry</button>
+        <div className="sticky bottom-2 z-30 -mx-1 rounded-2xl border border-blue-300/20 bg-[#081525]/95 p-2 shadow-xl shadow-black/30 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
+          <button type="submit" className="inline-flex min-h-12 w-full touch-manipulation items-center justify-center gap-2 rounded-xl bg-[#ffd84d] px-5 py-3 font-semibold text-[#07111f] hover:bg-yellow-300 sm:w-auto"><Save size={18} /> Save & next match</button>
+          <p className="mt-1.5 text-center text-[10px] text-slate-500 sm:hidden">Saved to this device first{isOnline ? "; cloud sync follows automatically." : "; sync waits for connection."}</p>
+        </div>
       </form>
 
       <aside className="space-y-4">
-        <section className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/80 p-5">
+        <section className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/80 p-4 sm:p-5">
           <div className="flex items-center justify-between gap-3">
             <div><h2 className="font-semibold text-[#ffd84d]">Offline queue</h2><p className="mt-1 text-xs text-slate-500">Multiple seasons can coexist in the same local queue.</p></div>
             <div className="text-2xl font-bold text-white">{entries.length}</div>
           </div>
-          <button type="button" disabled={entries.length === 0} onClick={exportEntries} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-300/20 px-4 py-2 text-sm font-medium text-slate-200 hover:border-[#ffd84d]/50 disabled:opacity-40"><Download size={16} /> Export JSON</button>
+          <button type="button" disabled={entries.length === 0} onClick={exportEntries} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-blue-300/20 px-4 py-2 text-sm font-medium text-slate-200 hover:border-[#ffd84d]/50 disabled:opacity-40"><Download size={16} /> Export JSON</button>
         </section>
 
         <section className="overflow-hidden rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/70">
@@ -271,7 +324,7 @@ export function MatchScoutingForm() {
                   <div className="font-semibold text-[#ffd84d]">Q{entry.matchNumber} · {entry.teamNumber}</div>
                   <div className="mt-1 text-xs text-slate-500">{entry.schemaVersion === 2 ? `${entry.season} · ${entry.gameKey}` : "Legacy entry"} · {entry.scoutName}</div>
                 </div>
-                <button type="button" onClick={() => removeEntry(entry.id)} className="rounded-lg p-2 text-slate-500 hover:bg-red-950/30 hover:text-red-300" aria-label="Delete entry"><Trash2 size={16} /></button>
+                <button type="button" onClick={() => removeEntry(entry.id)} className="rounded-lg p-2.5 text-slate-500 hover:bg-red-950/30 hover:text-red-300" aria-label="Delete entry"><Trash2 size={16} /></button>
               </div>
               <p className="mt-2 text-xs text-slate-500">{entry.eventKey}{entry.schemaVersion === 2 && entry.alliance ? ` · ${entry.alliance.toUpperCase()} alliance` : ""}</p>
             </div>
@@ -282,10 +335,10 @@ export function MatchScoutingForm() {
   );
 }
 
-const inputClass = "w-full rounded-xl border border-blue-300/20 bg-[#07111f] px-3 py-2.5 text-white outline-none placeholder:text-slate-700 focus:border-[#0b5fff]";
+const inputClass = "min-h-12 w-full rounded-xl border border-blue-300/20 bg-[#07111f] px-3 py-2.5 text-base text-white outline-none placeholder:text-slate-700 focus:border-[#0b5fff]";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="space-y-2 text-sm"><span className="font-medium text-slate-300">{label}</span>{children}</label>;
+  return <label className="space-y-1.5 text-sm sm:space-y-2"><span className="font-medium text-slate-300">{label}</span>{children}</label>;
 }
 
 function GameFieldControl({ field, value, onChange }: { field: GameField; value: ScoutingValue; onChange: (value: ScoutingValue) => void }) {
@@ -300,34 +353,34 @@ function GameFieldControl({ field, value, onChange }: { field: GameField; value:
   if (field.type === "number") {
     const min = field.min ?? 0;
     const max = field.max;
-    return <Field label={field.label}><input type="number" min={min} max={max} step={field.step ?? 0.1} value={value === "" ? "" : Number(value ?? min)} onChange={(event) => onChange(event.target.value === "" ? "" : numberWithinRange(event.target.value, min, max ?? Number.POSITIVE_INFINITY))} className={inputClass} />{field.help ? <p className="text-xs text-slate-600">{field.help}</p> : null}</Field>;
+    return <Field label={field.label}><input type="number" inputMode="decimal" min={min} max={max} step={field.step ?? 0.1} value={value === "" ? "" : Number(value ?? min)} onChange={(event) => onChange(event.target.value === "" ? "" : numberWithinRange(event.target.value, min, max ?? Number.POSITIVE_INFINITY))} className={inputClass} />{field.help ? <p className="text-xs text-slate-600">{field.help}</p> : null}</Field>;
   }
 
-  return <div className="space-y-2"><div className="text-sm font-medium text-slate-300">{field.label}</div><Counter value={value === "" ? "" : Number(value ?? 0)} setValue={(next) => onChange(next)} />{field.help ? <p className="text-xs text-slate-600">{field.help}</p> : null}</div>;
+  return <div className="space-y-1.5 sm:space-y-2"><div className="text-sm font-medium text-slate-300">{field.label}</div><Counter value={value === "" ? "" : Number(value ?? 0)} setValue={(next) => onChange(next)} />{field.help ? <p className="text-xs text-slate-600">{field.help}</p> : null}</div>;
 }
 
 function Counter({ value, setValue }: { value: number | ""; setValue: (value: number | "") => void }) {
   const numericValue = value === "" ? 0 : value;
-  return <div className="grid grid-cols-[44px_1fr_44px] overflow-hidden rounded-xl border border-blue-300/20 bg-[#07111f]"><button type="button" onClick={() => setValue(Math.max(0, numericValue - 1))} className="text-xl text-slate-300 hover:bg-[#0b5fff]/20">−</button><input type="number" min={0} value={value} onChange={(event) => setValue(event.target.value === "" ? "" : numberOrZero(event.target.value))} className="min-w-0 bg-transparent py-2 text-center font-mono text-lg font-semibold text-white outline-none" /><button type="button" onClick={() => setValue(numericValue + 1)} className="text-xl text-[#ffd84d] hover:bg-[#0b5fff]/20">+</button></div>;
+  return <div className="grid min-h-14 grid-cols-[56px_1fr_56px] overflow-hidden rounded-xl border border-blue-300/20 bg-[#07111f]"><button type="button" onClick={() => setValue(Math.max(0, numericValue - 1))} className="touch-manipulation text-2xl font-semibold text-slate-300 active:bg-[#0b5fff]/25">−</button><input type="number" inputMode="numeric" min={0} value={value} onChange={(event) => setValue(event.target.value === "" ? "" : numberOrZero(event.target.value))} className="min-w-0 bg-transparent py-2 text-center font-mono text-xl font-bold text-white outline-none" /><button type="button" onClick={() => setValue(numericValue + 1)} className="touch-manipulation text-2xl font-semibold text-[#ffd84d] active:bg-[#0b5fff]/25">+</button></div>;
 }
 
 function RatingSlider({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
   return (
-    <div className="space-y-3 rounded-xl border border-blue-300/15 bg-[#07111f]/60 p-4">
+    <div className="space-y-3 rounded-xl border border-blue-300/15 bg-[#07111f]/60 p-3 sm:p-4">
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm font-medium text-slate-300">{label}</span>
         <span className="min-w-10 rounded-lg bg-[#11243d] px-2 py-1 text-center font-mono text-lg font-bold text-[#ffd84d]">{value}</span>
       </div>
-      <input type="range" min={0} max={10} step={1} value={value} onChange={(event) => onChange(Number(event.target.value))} className="w-full accent-[#ffd84d]" />
+      <input type="range" min={0} max={10} step={1} value={value} onChange={(event) => onChange(Number(event.target.value))} className="h-8 w-full touch-manipulation accent-[#ffd84d]" />
       <div className="flex justify-between text-[11px] text-slate-600"><span>0</span><span>10</span></div>
     </div>
   );
 }
 
 function ChoiceGroup({ title, value, onChange, options }: { title: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) {
-  return <div className="space-y-2"><div className="text-sm font-medium text-slate-300">{title}</div><div className="grid gap-2">{options.map((option) => <button key={option.value} type="button" onClick={() => onChange(option.value)} className={`rounded-xl border px-3 py-2 text-sm ${value === option.value ? "border-[#ffd84d]/60 bg-[#ffd84d]/10 text-[#ffd84d]" : "border-blue-300/15 bg-[#07111f] text-slate-400"}`}>{option.label}</button>)}</div></div>;
+  return <div className="space-y-2"><div className="text-sm font-medium text-slate-300">{title}</div><div className="grid gap-2">{options.map((option) => <button key={option.value} type="button" onClick={() => onChange(option.value)} className={`min-h-12 touch-manipulation rounded-xl border px-3 py-2 text-sm font-medium ${value === option.value ? "border-[#ffd84d]/60 bg-[#ffd84d]/10 text-[#ffd84d]" : "border-blue-300/15 bg-[#07111f] text-slate-400"}`}>{option.label}</button>)}</div></div>;
 }
 
 function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
-  return <label className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm ${checked ? "border-[#ffd84d]/50 bg-[#ffd84d]/10 text-yellow-100" : "border-blue-300/15 bg-[#07111f]/60 text-slate-300"}`}><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-4 w-4 accent-[#ffd84d]" />{label}</label>;
+  return <label className={`flex min-h-14 cursor-pointer touch-manipulation items-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium ${checked ? "border-[#ffd84d]/50 bg-[#ffd84d]/10 text-yellow-100" : "border-blue-300/15 bg-[#07111f]/60 text-slate-300"}`}><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-5 w-5 shrink-0 accent-[#ffd84d]" />{label}</label>;
 }
