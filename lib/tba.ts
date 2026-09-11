@@ -32,7 +32,7 @@ export function getEventTeams(eventKey: string) {
 }
 
 export function getEventRankings(eventKey: string) {
-  return tbaFetch<TbaRankings>(`/event/${encodeURIComponent(eventKey)}/rankings`);
+  return tbaFetch<TbaRankings | null>(`/event/${encodeURIComponent(eventKey)}/rankings`);
 }
 
 export function getEventMatches(eventKey: string) {
