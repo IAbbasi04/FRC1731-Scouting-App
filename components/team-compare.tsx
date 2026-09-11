@@ -4,7 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import type { EventDashboard, EventDashboardTeam } from "@/types/frc";
 import { useMetricPreferences } from "@/components/metric-preferences";
-import { ScoutingCompareStrip } from "@/components/team-scouting-summary";
+import { ScoutingCompareTable } from "@/components/scouting-compare-table";
 
 const metricConfig = [
   { key: "epa", label: "EPA" },
@@ -97,33 +97,40 @@ export function TeamCompare() {
           <section className="rounded-2xl border border-blue-400/20 bg-gradient-to-br from-[#0d1b2e] to-[#0b5fff]/10 p-6">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#ffd84d]">{dashboard.event.key}</p>
             <h2 className="mt-2 text-2xl font-semibold text-white">{dashboard.event.name}</h2>
-            <p className="mt-2 text-sm text-slate-400">Comparing {teams.length} team{teams.length === 1 ? "" : "s"}. Public metric visibility follows the Metrics control in the header.</p>
+            <p className="mt-2 text-sm text-slate-400">Comparing {teams.length} team{teams.length === 1 ? "" : "s"} across public estimates and direct 1731 observations.</p>
           </section>
 
-          <section className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-            {teams.map((team) => (
-              <article key={team.teamNumber} className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/90 p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <Link href={`/teams/${team.teamNumber}?event=${dashboard.event.key}`} className="text-2xl font-bold text-[#ffd84d] hover:underline">{team.teamNumber}</Link>
-                    <h3 className="mt-1 font-semibold text-white">{team.nickname}</h3>
-                    <p className="text-sm text-slate-500">{[team.city, team.stateProv].filter(Boolean).join(", ")}</p>
+          <section className="space-y-4">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-300">Public metrics</div>
+              <h2 className="mt-1 text-xl font-semibold text-white">TBA / Statbotics snapshot</h2>
+              <p className="mt-1 text-sm text-slate-500">Estimated and official event data. Metric visibility follows the Metrics control in the header.</p>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+              {teams.map((team) => (
+                <article key={team.teamNumber} className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/90 p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <Link href={`/teams/${team.teamNumber}?event=${dashboard.event.key}`} className="text-2xl font-bold text-[#ffd84d] hover:underline">{team.teamNumber}</Link>
+                      <h3 className="mt-1 font-semibold text-white">{team.nickname}</h3>
+                      <p className="text-sm text-slate-500">{[team.city, team.stateProv].filter(Boolean).join(", ")}</p>
+                    </div>
+                    <div className="text-right"><div className="text-2xl font-semibold text-white">#{team.rank ?? "—"}</div><div className="text-xs text-slate-500">Rank</div></div>
                   </div>
-                  <div className="text-right"><div className="text-2xl font-semibold text-white">#{team.rank ?? "—"}</div><div className="text-xs text-slate-500">Rank</div></div>
-                </div>
-                <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-                  {visibleMetrics.map((metric) => <Metric key={metric.key} label={metric.label} value={format(team[metric.key])} />)}
-                  <Metric label="Record" value={record(team)} />
-                </div>
-              </article>
-            ))}
+                  <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+                    {visibleMetrics.map((metric) => <Metric key={metric.key} label={metric.label} value={format(team[metric.key])} />)}
+                    <Metric label="Record" value={record(team)} />
+                  </div>
+                </article>
+              ))}
+            </div>
           </section>
 
-          <ScoutingCompareStrip eventKey={dashboard.event.key} teamNumbers={teams.map((team) => team.teamNumber)} />
+          <ScoutingCompareTable eventKey={dashboard.event.key} teamNumbers={teams.map((team) => team.teamNumber)} />
 
           {visibleMetrics.length > 0 ? (
             <section className="space-y-5">
-              <div><h2 className="text-xl font-semibold text-white">Metric comparison</h2><p className="text-sm text-slate-500">Bars are scaled within the currently selected teams for each visible metric.</p></div>
+              <div><h2 className="text-xl font-semibold text-white">Public metric comparison</h2><p className="text-sm text-slate-500">Bars are scaled within the currently selected teams for each visible external metric.</p></div>
               {visibleMetrics.map((metric) => <MetricBars key={metric.key} teams={teams} metricKey={metric.key} label={metric.label} />)}
             </section>
           ) : (
@@ -131,6 +138,7 @@ export function TeamCompare() {
           )}
 
           <section className="overflow-x-auto rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/70">
+            <div className="border-b border-blue-400/10 bg-[#11243d] px-4 py-3"><div className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-300">Public metrics</div><h2 className="mt-1 font-semibold text-white">Side-by-side table</h2></div>
             <table className="min-w-full text-sm">
               <thead className="bg-[#11243d] text-slate-300"><tr><th className="px-4 py-3 text-left">Team</th><th className="px-4 py-3 text-right">Rank</th>{visibleMetrics.map((metric) => <th key={metric.key} className="px-4 py-3 text-right">{metric.label}</th>)}<th className="px-4 py-3 text-right">Record</th></tr></thead>
               <tbody className="divide-y divide-blue-400/10">
