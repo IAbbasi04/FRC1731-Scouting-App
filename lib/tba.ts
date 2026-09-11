@@ -40,5 +40,5 @@ export function getEventMatches(eventKey: string) {
 }
 
 export function getEventOprs(eventKey: string) {
-  return tbaFetch<TbaOprs>(`/event/${encodeURIComponent(eventKey)}/oprs`);
+  return tbaFetch<TbaOprs | null>(`/event/${encodeURIComponent(eventKey)}/oprs`);
 }
