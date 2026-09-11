@@ -4,7 +4,7 @@ import Link from "next/link";
 import { BarChart3, ClipboardList, GitCompareArrows, Home, ListChecks, LogOut, Trophy, Users, Wrench } from "lucide-react";
 import { MetricPreferencesButton } from "@/components/metric-preferences-button";
 import { PwaRegistration } from "@/components/pwa-registration";
-import { scouterRoles, useScouterSession } from "@/components/scouter-session";
+import { useScouterSession } from "@/components/scouter-session";
 
 const nav = [
   { href: "/", label: "Home", icon: Home },
@@ -19,7 +19,6 @@ const nav = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { session, signOut } = useScouterSession();
-  const roleLabel = scouterRoles.find((role) => role.value === session.role)?.label ?? session.role;
 
   return (
     <div className="min-h-screen">
@@ -38,16 +37,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               ))}
             </nav>
-            <div className="hidden max-w-40 leading-tight lg:block">
+            <div className="hidden max-w-40 lg:block">
               <div className="truncate text-sm font-medium text-white">{session.name}</div>
-              <div className="truncate text-[11px] text-slate-500">{roleLabel}</div>
             </div>
             <button
               type="button"
               onClick={signOut}
               className="inline-flex items-center gap-2 rounded-lg border border-blue-300/15 px-2.5 py-2 text-xs font-medium text-slate-300 hover:border-[#ffd84d]/40 hover:text-[#ffd84d] sm:px-3"
-              title={`Switch user · currently ${session.name} (${roleLabel})`}
-              aria-label={`Switch user. Currently signed in as ${session.name}, ${roleLabel}.`}
+              title={`Switch user · currently ${session.name}`}
+              aria-label={`Switch user. Currently signed in as ${session.name}.`}
             >
               <LogOut size={15} />
               <span className="hidden sm:inline">Switch user</span>
