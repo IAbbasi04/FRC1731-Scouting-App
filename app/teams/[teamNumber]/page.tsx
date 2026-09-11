@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getEventDashboard } from "@/lib/event-dashboard";
 import { TeamEventMetrics, TeamEventSnapshot } from "@/components/team-event-metrics";
+import { TeamPitSummary } from "@/components/team-pit-summary";
 import { TeamScoutingSummary } from "@/components/team-scouting-summary";
 
 export default async function TeamEventProfilePage({
@@ -36,6 +37,7 @@ export default async function TeamEventProfilePage({
 
       <TeamEventMetrics team={team} />
       <TeamEventSnapshot team={team} matchCount={teamMatches.length} />
+      <TeamPitSummary eventKey={event} teamNumber={teamNumber} />
       <TeamScoutingSummary eventKey={event} teamNumber={teamNumber} />
 
       <section className="overflow-hidden rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/70">
