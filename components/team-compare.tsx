@@ -3,12 +3,13 @@
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import type { EventDashboard, EventDashboardTeam } from "@/types/frc";
+import { useMetricPreferences } from "@/components/metric-preferences";
 
 const metricConfig = [
-  { key: "epa", label: "EPA", better: "high" },
-  { key: "opr", label: "OPR", better: "high" },
-  { key: "ccwm", label: "CCWM", better: "high" },
-  { key: "dpr", label: "DPR", better: "context" },
+  { key: "epa", label: "EPA" },
+  { key: "opr", label: "OPR" },
+  { key: "ccwm", label: "CCWM" },
+  { key: "dpr", label: "DPR" },
 ] as const;
 
 type MetricKey = (typeof metricConfig)[number]["key"];
@@ -27,6 +28,7 @@ function parseTeams(value: string) {
 }
 
 export function TeamCompare() {
+  const { visibility } = useMetricPreferences();
   const [eventKey, setEventKey] = useState("");
   const [teamInput, setTeamInput] = useState("1731");
   const [dashboard, setDashboard] = useState<EventDashboard | null>(null);
@@ -68,6 +70,8 @@ export function TeamCompare() {
     return selectedTeams.filter((number) => !dashboard.teams.some((team) => team.teamNumber === number));
   }, [dashboard, selectedTeams]);
 
+  const visibleMetrics = metricConfig.filter((metric) => visibility[metric.key]);
+
   return (
     <div className="space-y-8">
       <form onSubmit={submit} className="grid gap-4 rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/90 p-5 md:grid-cols-[1fr_2fr_auto] md:items-end">
@@ -92,7 +96,7 @@ export function TeamCompare() {
           <section className="rounded-2xl border border-blue-400/20 bg-gradient-to-br from-[#0d1b2e] to-[#0b5fff]/10 p-6">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#ffd84d]">{dashboard.event.key}</p>
             <h2 className="mt-2 text-2xl font-semibold text-white">{dashboard.event.name}</h2>
-            <p className="mt-2 text-sm text-slate-400">Comparing {teams.length} team{teams.length === 1 ? "" : "s"}</p>
+            <p className="mt-2 text-sm text-slate-400">Comparing {teams.length} team{teams.length === 1 ? "" : "s"}. Public metric visibility follows the Metrics control in the header.</p>
           </section>
 
           <section className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
@@ -107,25 +111,27 @@ export function TeamCompare() {
                   <div className="text-right"><div className="text-2xl font-semibold text-white">#{team.rank ?? "—"}</div><div className="text-xs text-slate-500">Rank</div></div>
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-                  <Metric label="EPA" value={format(team.epa)} />
-                  <Metric label="OPR" value={format(team.opr)} />
-                  <Metric label="CCWM" value={format(team.ccwm)} />
+                  {visibleMetrics.map((metric) => <Metric key={metric.key} label={metric.label} value={format(team[metric.key])} />)}
                   <Metric label="Record" value={record(team)} />
                 </div>
               </article>
             ))}
           </section>
 
-          <section className="space-y-5">
-            <div><h2 className="text-xl font-semibold text-white">Metric comparison</h2><p className="text-sm text-slate-500">Bars are scaled within the currently selected teams for each metric.</p></div>
-            {metricConfig.map((metric) => <MetricBars key={metric.key} teams={teams} metricKey={metric.key} label={metric.label} />)}
-          </section>
+          {visibleMetrics.length > 0 ? (
+            <section className="space-y-5">
+              <div><h2 className="text-xl font-semibold text-white">Metric comparison</h2><p className="text-sm text-slate-500">Bars are scaled within the currently selected teams for each visible metric.</p></div>
+              {visibleMetrics.map((metric) => <MetricBars key={metric.key} teams={teams} metricKey={metric.key} label={metric.label} />)}
+            </section>
+          ) : (
+            <div className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/70 p-5 text-sm text-slate-400">All public performance metrics are hidden. Use <span className="font-semibold text-[#ffd84d]">Metrics</span> in the header to turn one on.</div>
+          )}
 
           <section className="overflow-x-auto rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/70">
             <table className="min-w-full text-sm">
-              <thead className="bg-[#11243d] text-slate-300"><tr><th className="px-4 py-3 text-left">Team</th><th className="px-4 py-3 text-right">Rank</th><th className="px-4 py-3 text-right">EPA</th><th className="px-4 py-3 text-right">OPR</th><th className="px-4 py-3 text-right">DPR</th><th className="px-4 py-3 text-right">CCWM</th><th className="px-4 py-3 text-right">Record</th></tr></thead>
+              <thead className="bg-[#11243d] text-slate-300"><tr><th className="px-4 py-3 text-left">Team</th><th className="px-4 py-3 text-right">Rank</th>{visibleMetrics.map((metric) => <th key={metric.key} className="px-4 py-3 text-right">{metric.label}</th>)}<th className="px-4 py-3 text-right">Record</th></tr></thead>
               <tbody className="divide-y divide-blue-400/10">
-                {teams.map((team) => <tr key={team.teamNumber} className="hover:bg-[#0b5fff]/5"><td className="px-4 py-3 font-semibold text-[#ffd84d]">{team.teamNumber} <span className="font-normal text-slate-400">{team.nickname}</span></td><td className="px-4 py-3 text-right">{team.rank ?? "—"}</td><td className="px-4 py-3 text-right">{format(team.epa)}</td><td className="px-4 py-3 text-right">{format(team.opr)}</td><td className="px-4 py-3 text-right">{format(team.dpr)}</td><td className="px-4 py-3 text-right">{format(team.ccwm)}</td><td className="px-4 py-3 text-right">{record(team)}</td></tr>)}
+                {teams.map((team) => <tr key={team.teamNumber} className="hover:bg-[#0b5fff]/5"><td className="px-4 py-3 font-semibold text-[#ffd84d]">{team.teamNumber} <span className="font-normal text-slate-400">{team.nickname}</span></td><td className="px-4 py-3 text-right">{team.rank ?? "—"}</td>{visibleMetrics.map((metric) => <td key={metric.key} className="px-4 py-3 text-right">{format(team[metric.key])}</td>)}<td className="px-4 py-3 text-right">{record(team)}</td></tr>)}
               </tbody>
             </table>
           </section>
