@@ -22,6 +22,9 @@ export interface MatchScoutingEntry {
   autoStart?: FieldPoint;
   gameData: Record<string, ScoutingValue>;
   defense: DefenseLevel;
+  driverRating?: number;
+  playedDefense?: boolean;
+  defenseRating?: number;
   penalties: number;
   disabled: boolean;
   tipped: boolean;
