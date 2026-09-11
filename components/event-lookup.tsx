@@ -1,11 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ArrowDownUp, ExternalLink } from "lucide-react";
 import type { EventDashboard, EventDashboardTeam, TbaMatch } from "@/types/frc";
+import { useMetricPreferences } from "@/components/metric-preferences";
 
 type SortKey = "rank" | "teamNumber" | "epa" | "opr" | "dpr" | "ccwm";
+
+const metricColumns = [
+  ["epa", "EPA"],
+  ["opr", "OPR"],
+  ["dpr", "DPR"],
+  ["ccwm", "CCWM"],
+] as const;
 
 function metric(value: number | null, digits = 1) {
   return value === null ? "—" : value.toFixed(digits);
@@ -26,12 +34,22 @@ function allianceTeams(teamKeys: string[]) {
 }
 
 export function EventLookup() {
+  const { visibility } = useMetricPreferences();
   const [eventKey, setEventKey] = useState("");
   const [dashboard, setDashboard] = useState<EventDashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("rank");
   const [descending, setDescending] = useState(false);
+
+  const visibleMetricColumns = metricColumns.filter(([key]) => visibility[key]);
+
+  useEffect(() => {
+    if (["epa", "opr", "dpr", "ccwm"].includes(sortKey) && !visibility[sortKey as "epa" | "opr" | "dpr" | "ccwm"]) {
+      setSortKey("rank");
+      setDescending(false);
+    }
+  }, [sortKey, visibility]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -82,12 +100,12 @@ export function EventLookup() {
 
   return (
     <div className="space-y-8">
-      <form onSubmit={submit} className="flex max-w-2xl flex-col gap-3 rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/90 p-5 shadow-lg shadow-blue-950/20 sm:flex-row">
+      <form onSubmit={submit} className="flex max-w-2xl flex-col gap-3 rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/90 p-5 sm:flex-row">
         <input
           value={eventKey}
           onChange={(event) => setEventKey(event.target.value)}
           aria-label="TBA event key"
-          className="min-w-0 flex-1 rounded-xl border border-blue-300/20 bg-[#07111f] px-4 py-3 text-white outline-none placeholder:text-slate-600 focus:border-[#0b5fff] focus:ring-2 focus:ring-[#0b5fff]/20"
+          className="min-w-0 flex-1 rounded-xl border border-blue-300/20 bg-[#07111f] px-4 py-3 outline-none focus:border-[#0b5fff]"
           placeholder="e.g. 2026vahay"
         />
         <button disabled={loading || !eventKey.trim()} className="rounded-xl bg-[#ffd84d] px-5 py-3 font-semibold text-[#07111f] hover:bg-yellow-300 disabled:opacity-50">
@@ -95,7 +113,7 @@ export function EventLookup() {
         </button>
       </form>
 
-      {error ? <p className="rounded-xl border border-red-400/30 bg-red-950/30 p-4 text-sm text-red-200">{error}</p> : null}
+      {error ? <p className="rounded-xl border border-red-900/60 bg-red-950/30 p-4 text-sm text-red-200">{error}</p> : null}
 
       {dashboard ? (
         <>
@@ -110,44 +128,34 @@ export function EventLookup() {
                 </p>
               </div>
               <div className="grid grid-cols-3 gap-3 text-center">
-                {[['Teams', dashboard.teams.length], ['Played', completedMatches.length], ['Upcoming', upcomingMatches.length]].map(([label, value]) => (
-                  <div key={String(label)} className="rounded-xl border border-blue-300/10 bg-[#07111f]/80 px-4 py-3">
-                    <div className="text-2xl font-semibold text-white">{value}</div>
-                    <div className="text-xs text-[#ffd84d]">{label}</div>
-                  </div>
-                ))}
+                <SummaryStat value={dashboard.teams.length} label="Teams" />
+                <SummaryStat value={completedMatches.length} label="Played" />
+                <SummaryStat value={upcomingMatches.length} label="Upcoming" />
               </div>
             </div>
           </section>
 
           <section className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div><h2 className="text-xl font-semibold text-white">Team metrics</h2><p className="text-sm text-slate-500">TBA rankings/OPR plus Statbotics EPA. Click a heading to sort.</p></div>
+            <div className="flex items-center justify-between gap-4">
+              <div><h2 className="text-xl font-semibold text-white">Team metrics</h2><p className="text-sm text-slate-500">Use the Metrics control in the header to choose which public models appear.</p></div>
             </div>
-            <div className="overflow-x-auto rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/70">
+            <div className="overflow-x-auto rounded-2xl border border-blue-400/20">
               <table className="min-w-full text-sm">
                 <thead className="bg-[#11243d] text-left text-slate-300">
                   <tr>
-                    {([
-                      ["rank", "Rank"], ["teamNumber", "Team"], ["epa", "EPA"], ["opr", "OPR"], ["dpr", "DPR"], ["ccwm", "CCWM"],
-                    ] as Array<[SortKey, string]>).map(([key, label]) => (
-                      <th key={key} className="px-4 py-3 font-medium">
-                        <button onClick={() => chooseSort(key)} className="inline-flex items-center gap-1 hover:text-[#ffd84d]">{label}<ArrowDownUp size={13} /></button>
-                      </th>
-                    ))}
+                    <SortableHeader sortKey="rank" label="Rank" onSort={chooseSort} />
+                    <SortableHeader sortKey="teamNumber" label="Team" onSort={chooseSort} />
+                    {visibleMetricColumns.map(([key, label]) => <SortableHeader key={key} sortKey={key} label={label} onSort={chooseSort} />)}
                     <th className="px-4 py-3 font-medium">Record</th>
                     <th className="px-4 py-3 font-medium">Team name</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-blue-400/10">
                   {sortedTeams.map((team) => (
-                    <tr key={team.teamKey} className="bg-[#07111f]/30 hover:bg-[#0b5fff]/10">
+                    <tr key={team.teamKey} className="bg-[#07111f]/30 hover:bg-[#0b5fff]/5">
                       <td className="px-4 py-3">{team.rank ?? "—"}</td>
-                      <td className="px-4 py-3 font-mono font-semibold"><Link className="text-[#ffd84d] hover:text-yellow-200 hover:underline" href={`/teams/${team.teamNumber}?event=${dashboard.event.key}`}>{team.teamNumber}</Link></td>
-                      <td className="px-4 py-3 font-medium text-blue-200">{metric(team.epa)}</td>
-                      <td className="px-4 py-3">{metric(team.opr)}</td>
-                      <td className="px-4 py-3">{metric(team.dpr)}</td>
-                      <td className="px-4 py-3">{metric(team.ccwm)}</td>
+                      <td className="px-4 py-3 font-mono font-semibold"><Link className="text-[#ffd84d] hover:underline" href={`/teams/${team.teamNumber}?event=${dashboard.event.key}`}>{team.teamNumber}</Link></td>
+                      {visibleMetricColumns.map(([key]) => <td key={key} className="px-4 py-3">{metric(team[key])}</td>)}
                       <td className="px-4 py-3">{record(team)}</td>
                       <td className="px-4 py-3"><div>{team.nickname}</div><div className="text-xs text-slate-600">{[team.city, team.stateProv].filter(Boolean).join(", ")}</div></td>
                     </tr>
@@ -162,24 +170,32 @@ export function EventLookup() {
             <MatchList title="Recent results" matches={[...completedMatches].reverse().slice(0, 12)} />
           </section>
 
-          <p className="flex items-center gap-2 text-xs text-slate-600"><ExternalLink size={12} /> External metrics remain labeled by source; our future scouting-derived metrics will stay separate.</p>
+          <p className="flex items-center gap-2 text-xs text-slate-600"><ExternalLink size={12} /> Public metrics remain source-labeled; 1731 scouting metrics will stay separate.</p>
         </>
       ) : null}
     </div>
   );
 }
 
+function SortableHeader({ sortKey, label, onSort }: { sortKey: SortKey; label: string; onSort: (key: SortKey) => void }) {
+  return <th className="px-4 py-3 font-medium"><button onClick={() => onSort(sortKey)} className="inline-flex items-center gap-1 hover:text-[#ffd84d]">{label}<ArrowDownUp size={13} /></button></th>;
+}
+
+function SummaryStat({ value, label }: { value: number; label: string }) {
+  return <div className="rounded-xl border border-blue-400/10 bg-[#07111f]/80 px-4 py-3"><div className="text-2xl font-semibold text-white">{value}</div><div className="text-xs text-slate-500">{label}</div></div>;
+}
+
 function MatchList({ title, matches }: { title: string; matches: TbaMatch[] }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/70">
+    <section className="overflow-hidden rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/50">
       <div className="border-b border-blue-400/10 bg-[#11243d] px-5 py-3"><h2 className="font-semibold text-[#ffd84d]">{title}</h2></div>
       {matches.length === 0 ? <p className="p-5 text-sm text-slate-500">No matches to show yet.</p> : (
         <div className="divide-y divide-blue-400/10">
           {matches.map((match) => (
-            <div key={match.key} className="grid grid-cols-[70px_1fr_auto] items-center gap-3 px-5 py-3 text-sm hover:bg-[#0b5fff]/5">
+            <div key={match.key} className="grid grid-cols-[70px_1fr_auto] items-center gap-3 px-5 py-3 text-sm">
               <div className="font-medium text-white">{matchLabel(match)}</div>
               <div className="space-y-1 text-slate-400"><div><span className="mr-2 text-red-300">RED</span>{allianceTeams(match.alliances.red.team_keys)}</div><div><span className="mr-2 text-blue-300">BLUE</span>{allianceTeams(match.alliances.blue.team_keys)}</div></div>
-              <div className="text-right font-mono text-slate-200"><div>{match.alliances.red.score >= 0 ? match.alliances.red.score : "—"}</div><div>{match.alliances.blue.score >= 0 ? match.alliances.blue.score : "—"}</div></div>
+              <div className="text-right font-mono"><div>{match.alliances.red.score >= 0 ? match.alliances.red.score : "—"}</div><div>{match.alliances.blue.score >= 0 ? match.alliances.blue.score : "—"}</div></div>
             </div>
           ))}
         </div>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BarChart3, ClipboardList, GitCompareArrows, Home, ListChecks, Trophy, Users } from "lucide-react";
+import { MetricPreferencesButton } from "@/components/metric-preferences-button";
 
 const nav = [
   { href: "/", label: "Home", icon: Home },
@@ -19,13 +20,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="grid h-10 w-10 place-items-center rounded-xl border border-yellow-300/40 bg-[#0b5fff] text-[#ffd84d] shadow-lg shadow-blue-950/30"><BarChart3 size={20} /></span>
             <span><span className="text-[#ffd84d]">1731</span> Scouting</span>
           </Link>
-          <nav className="hidden gap-1 md:flex">
-            {nav.map(({ href, label, icon: Icon }) => (
-              <Link key={href} href={href} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-[#0b5fff]/15 hover:text-[#ffd84d]">
-                <Icon size={16} /> {label}
-              </Link>
-            ))}
-          </nav>
+          <div className="flex items-center gap-2">
+            <nav className="hidden gap-1 md:flex">
+              {nav.map(({ href, label, icon: Icon }) => (
+                <Link key={href} href={href} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-[#0b5fff]/15 hover:text-[#ffd84d]">
+                  <Icon size={16} /> {label}
+                </Link>
+              ))}
+            </nav>
+            <MetricPreferencesButton />
+          </div>
         </div>
       </header>
       {children}

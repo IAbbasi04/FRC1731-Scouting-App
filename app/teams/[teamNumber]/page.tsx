@@ -1,10 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getEventDashboard } from "@/lib/event-dashboard";
-
-function value(number: number | null, digits = 1) {
-  return number === null ? "—" : number.toFixed(digits);
-}
+import { TeamEventMetrics, TeamEventSnapshot } from "@/components/team-event-metrics";
 
 export default async function TeamEventProfilePage({
   params,
@@ -36,24 +33,8 @@ export default async function TeamEventProfilePage({
         <p className="mt-2 text-slate-400">{[team.city, team.stateProv].filter(Boolean).join(", ")}</p>
       </div>
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-        <Metric label="Rank" value={team.rank?.toString() ?? "—"} source="TBA" />
-        <Metric label="EPA" value={value(team.epa)} source="Statbotics" />
-        <Metric label="OPR" value={value(team.opr)} source="TBA" />
-        <Metric label="DPR" value={value(team.dpr)} source="TBA" />
-        <Metric label="CCWM" value={value(team.ccwm)} source="TBA" />
-        <Metric label="Auto EPA" value={value(team.epaAuto)} source="Statbotics" />
-        <Metric label="Teleop EPA" value={value(team.epaTeleop)} source="Statbotics" />
-      </section>
-
-      <section className="rounded-2xl border border-blue-400/20 bg-gradient-to-br from-[#0d1b2e] to-[#0b5fff]/10 p-6">
-        <h2 className="text-xl font-semibold text-[#ffd84d]">Event snapshot</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-3">
-          <div><div className="text-sm text-slate-500">Record</div><div className="mt-1 text-2xl font-semibold text-white">{team.record ? `${team.record.wins}-${team.record.losses}-${team.record.ties}` : "—"}</div></div>
-          <div><div className="text-sm text-slate-500">Endgame EPA</div><div className="mt-1 text-2xl font-semibold text-white">{value(team.epaEndgame)}</div></div>
-          <div><div className="text-sm text-slate-500">Matches on schedule</div><div className="mt-1 text-2xl font-semibold text-white">{teamMatches.length}</div></div>
-        </div>
-      </section>
+      <TeamEventMetrics team={team} />
+      <TeamEventSnapshot team={team} matchCount={teamMatches.length} />
 
       <section className="overflow-hidden rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/70">
         <div className="border-b border-blue-400/10 bg-[#11243d] px-5 py-3"><h2 className="font-semibold text-[#ffd84d]">Matches</h2></div>
@@ -74,8 +55,4 @@ export default async function TeamEventProfilePage({
       </section>
     </main>
   );
-}
-
-function Metric({ label, value, source }: { label: string; value: string; source: string }) {
-  return <div className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/90 p-4"><div className="text-xs uppercase tracking-wide text-[#ffd84d]">{label}</div><div className="mt-2 text-2xl font-semibold text-white">{value}</div><div className="mt-2 text-xs text-slate-600">{source}</div></div>;
 }
