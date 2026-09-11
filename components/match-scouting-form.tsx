@@ -44,8 +44,8 @@ export function MatchScoutingForm() {
   const [season, setSeason] = useState(2026);
   const config = getScoutingSeason(season);
   const [eventKey, setEventKey] = useState("");
-  const [matchNumber, setMatchNumber] = useState(1);
-  const [teamNumber, setTeamNumber] = useState(1731);
+  const [matchNumber, setMatchNumber] = useState<number | "">(1);
+  const [teamNumber, setTeamNumber] = useState<number | "">(1731);
   const [scoutName, setScoutName] = useState("");
   const [alliance, setAlliance] = useState<AllianceColor>("red");
   const [gameData, setGameData] = useState<Record<string, ScoutingValue>>(() => defaultGameData(config.fields));
@@ -53,7 +53,7 @@ export function MatchScoutingForm() {
   const [driverRating, setDriverRating] = useState(5);
   const [playedDefense, setPlayedDefense] = useState(false);
   const [defenseRating, setDefenseRating] = useState(5);
-  const [penalties, setPenalties] = useState(0);
+  const [penalties, setPenalties] = useState<number | "">(0);
   const [disabled, setDisabled] = useState(false);
   const [tipped, setTipped] = useState(false);
   const [mechanicalIssue, setMechanicalIssue] = useState(false);
@@ -98,10 +98,24 @@ export function MatchScoutingForm() {
     event.preventDefault();
     setMessage(null);
 
-    if (!eventKey.trim() || !scoutName.trim() || teamNumber <= 0 || matchNumber <= 0) {
+    const resolvedMatchNumber = matchNumber === "" ? 0 : matchNumber;
+    const resolvedTeamNumber = teamNumber === "" ? 0 : teamNumber;
+    const resolvedPenalties = penalties === "" ? 0 : penalties;
+
+    if (!eventKey.trim() || !scoutName.trim() || resolvedTeamNumber <= 0 || resolvedMatchNumber <= 0) {
       setMessage("Event, match, team, and scout name are required.");
       return;
     }
+
+    const normalizedGameData = Object.fromEntries(
+      config.fields.map((field) => {
+        const value = gameData[field.key];
+        if ((field.type === "counter" || field.type === "number") && value === "") {
+          return [field.key, field.min ?? 0];
+        }
+        return [field.key, value];
+      }),
+    ) as Record<string, ScoutingValue>;
 
     const entry: MatchScoutingEntry = {
       id: crypto.randomUUID(),
@@ -109,17 +123,17 @@ export function MatchScoutingForm() {
       season: config.year,
       gameKey: config.gameKey,
       eventKey: eventKey.trim().toLowerCase(),
-      matchNumber,
-      teamNumber,
+      matchNumber: resolvedMatchNumber,
+      teamNumber: resolvedTeamNumber,
       scoutName: scoutName.trim(),
       createdAt: new Date().toISOString(),
       alliance,
-      gameData,
+      gameData: normalizedGameData,
       defense,
       driverRating,
       playedDefense,
       defenseRating: playedDefense ? defenseRating : undefined,
-      penalties,
+      penalties: resolvedPenalties,
       disabled,
       tipped,
       mechanicalIssue,
@@ -129,8 +143,8 @@ export function MatchScoutingForm() {
     };
 
     setEntries((current) => [...current, entry]);
-    setMessage(`Saved ${config.year} Q${matchNumber} · Team ${teamNumber} locally.`);
-    setMatchNumber((current) => current + 1);
+    setMessage(`Saved ${config.year} Q${resolvedMatchNumber} · Team ${resolvedTeamNumber} locally.`);
+    setMatchNumber(resolvedMatchNumber + 1);
     setGameData(defaultGameData(config.fields));
     setDefense("none");
     setDriverRating(5);
@@ -175,8 +189,8 @@ export function MatchScoutingForm() {
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Field label="Event key"><input value={eventKey} onChange={(event) => handleEventKey(event.target.value)} placeholder="2026vahay" className={inputClass} /></Field>
-          <Field label="Match"><input type="number" min={1} value={matchNumber} onChange={(event) => setMatchNumber(numberOrZero(event.target.value))} className={inputClass} /></Field>
-          <Field label="Team"><input type="number" min={1} value={teamNumber} onChange={(event) => setTeamNumber(numberOrZero(event.target.value))} className={inputClass} /></Field>
+          <Field label="Match"><input type="number" min={1} value={matchNumber} onChange={(event) => setMatchNumber(event.target.value === "" ? "" : numberOrZero(event.target.value))} className={inputClass} /></Field>
+          <Field label="Team"><input type="number" min={1} value={teamNumber} onChange={(event) => setTeamNumber(event.target.value === "" ? "" : numberOrZero(event.target.value))} className={inputClass} /></Field>
           <Field label="Scout"><input value={scoutName} onChange={(event) => setScoutName(event.target.value)} placeholder="Name" className={inputClass} /></Field>
           <Field label="Alliance"><select value={alliance} onChange={(event) => setAlliance(event.target.value as AllianceColor)} className={inputClass}><option value="red">Red</option><option value="blue">Blue</option></select></Field>
         </section>
@@ -223,7 +237,7 @@ export function MatchScoutingForm() {
         </section>
 
         <section className="grid gap-4 md:grid-cols-2">
-          <Field label="Penalties"><input type="number" min={0} value={penalties} onChange={(event) => setPenalties(numberOrZero(event.target.value))} className={inputClass} /></Field>
+          <Field label="Penalties"><input type="number" min={0} value={penalties} onChange={(event) => setPenalties(event.target.value === "" ? "" : numberOrZero(event.target.value))} className={inputClass} /></Field>
           <div className="grid gap-2 sm:grid-cols-3">
             <Check label="Disabled" checked={disabled} onChange={setDisabled} />
             <Check label="Tipped" checked={tipped} onChange={setTipped} />
@@ -285,14 +299,15 @@ function GameFieldControl({ field, value, onChange }: { field: GameField; value:
   if (field.type === "number") {
     const min = field.min ?? 0;
     const max = field.max;
-    return <Field label={field.label}><input type="number" min={min} max={max} step={field.step ?? 0.1} value={Number(value ?? min)} onChange={(event) => onChange(numberWithinRange(event.target.value, min, max ?? Number.POSITIVE_INFINITY))} className={inputClass} />{field.help ? <p className="text-xs text-slate-600">{field.help}</p> : null}</Field>;
+    return <Field label={field.label}><input type="number" min={min} max={max} step={field.step ?? 0.1} value={value === "" ? "" : Number(value ?? min)} onChange={(event) => onChange(event.target.value === "" ? "" : numberWithinRange(event.target.value, min, max ?? Number.POSITIVE_INFINITY))} className={inputClass} />{field.help ? <p className="text-xs text-slate-600">{field.help}</p> : null}</Field>;
   }
 
-  return <div className="space-y-2"><div className="text-sm font-medium text-slate-300">{field.label}</div><Counter value={Number(value ?? 0)} setValue={(next) => onChange(next)} />{field.help ? <p className="text-xs text-slate-600">{field.help}</p> : null}</div>;
+  return <div className="space-y-2"><div className="text-sm font-medium text-slate-300">{field.label}</div><Counter value={value === "" ? "" : Number(value ?? 0)} setValue={(next) => onChange(next)} />{field.help ? <p className="text-xs text-slate-600">{field.help}</p> : null}</div>;
 }
 
-function Counter({ value, setValue }: { value: number; setValue: (value: number) => void }) {
-  return <div className="grid grid-cols-[44px_1fr_44px] overflow-hidden rounded-xl border border-blue-300/20 bg-[#07111f]"><button type="button" onClick={() => setValue(Math.max(0, value - 1))} className="text-xl text-slate-300 hover:bg-[#0b5fff]/20">−</button><input type="number" min={0} value={value} onChange={(event) => setValue(numberOrZero(event.target.value))} className="min-w-0 bg-transparent py-2 text-center font-mono text-lg font-semibold text-white outline-none" /><button type="button" onClick={() => setValue(value + 1)} className="text-xl text-[#ffd84d] hover:bg-[#0b5fff]/20">+</button></div>;
+function Counter({ value, setValue }: { value: number | ""; setValue: (value: number | "") => void }) {
+  const numericValue = value === "" ? 0 : value;
+  return <div className="grid grid-cols-[44px_1fr_44px] overflow-hidden rounded-xl border border-blue-300/20 bg-[#07111f]"><button type="button" onClick={() => setValue(Math.max(0, numericValue - 1))} className="text-xl text-slate-300 hover:bg-[#0b5fff]/20">−</button><input type="number" min={0} value={value} onChange={(event) => setValue(event.target.value === "" ? "" : numberOrZero(event.target.value))} className="min-w-0 bg-transparent py-2 text-center font-mono text-lg font-semibold text-white outline-none" /><button type="button" onClick={() => setValue(numericValue + 1)} className="text-xl text-[#ffd84d] hover:bg-[#0b5fff]/20">+</button></div>;
 }
 
 function RatingSlider({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
