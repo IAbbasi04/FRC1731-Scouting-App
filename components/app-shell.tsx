@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, ClipboardList, GitCompareArrows, Home, ListChecks, Trophy, Users } from "lucide-react";
+import { BarChart3, ClipboardList, GitCompareArrows, Home, ListChecks, Trophy, Users, Wrench } from "lucide-react";
 import { MetricPreferencesButton } from "@/components/metric-preferences-button";
 import { PwaRegistration } from "@/components/pwa-registration";
 
@@ -8,6 +8,7 @@ const nav = [
   { href: "/events", label: "Events", icon: Trophy },
   { href: "/teams", label: "Teams", icon: Users },
   { href: "/scouting", label: "Scouting", icon: ClipboardList },
+  { href: "/pit-scouting", label: "Pit", icon: Wrench },
   { href: "/analysis", label: "Analysis", icon: BarChart3 },
   { href: "/compare", label: "Compare", icon: GitCompareArrows },
   { href: "/picklist", label: "Pick List", icon: ListChecks },
