@@ -13,6 +13,9 @@ type CloudEntry = {
   scoutName: string;
   gameData: Record<string, string | number | boolean | null>;
   defense: "none" | "light" | "heavy";
+  driverRating?: number;
+  playedDefense?: boolean;
+  defenseRating?: number;
   penalties: number;
   disabled: boolean;
   tipped: boolean;
@@ -60,6 +63,16 @@ function summarizeField(field: GameField, entries: CloudEntry[]) {
   const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
   const label = field.options?.find((option) => option.value === top[0])?.label ?? top[0];
   return `${label} (${top[1]}/${strings.length})`;
+}
+
+function averageOptional(entries: CloudEntry[], select: (entry: CloudEntry) => number | undefined) {
+  const values = entries.map(select).filter((value): value is number => typeof value === "number");
+  return average(values);
+}
+
+function booleanRate(entries: CloudEntry[], select: (entry: CloudEntry) => boolean | undefined) {
+  const values = entries.map(select).filter((value): value is boolean => typeof value === "boolean");
+  return values.length ? values.filter(Boolean).length / values.length : null;
 }
 
 export function ScoutingCompareTable({ eventKey, teamNumbers }: { eventKey: string; teamNumbers: number[] }) {
@@ -118,7 +131,10 @@ export function ScoutingCompareTable({ eventKey, teamNumbers }: { eventKey: stri
           <tbody className="divide-y divide-blue-400/10">
             <Row label="Matches scouted" values={teams.map((team) => String(team.entries.length))} />
             <Row label="Reliability issues" values={teams.map((team) => percent(team.entries.length ? team.entries.filter((entry) => entry.disabled || entry.tipped || entry.mechanicalIssue).length / team.entries.length : null))} />
-            <Row label="Heavy defense" values={teams.map((team) => percent(team.entries.length ? team.entries.filter((entry) => entry.defense === "heavy").length / team.entries.length : null))} />
+            <Row label="Heavily guarded" values={teams.map((team) => percent(team.entries.length ? team.entries.filter((entry) => entry.defense === "heavy").length / team.entries.length : null))} />
+            <Row label="Avg driver rating" values={teams.map((team) => formatNumber(averageOptional(team.entries, (entry) => entry.driverRating)))} />
+            <Row label="Played defense" values={teams.map((team) => percent(booleanRate(team.entries, (entry) => entry.playedDefense)))} />
+            <Row label="Avg defense quality" values={teams.map((team) => formatNumber(averageOptional(team.entries, (entry) => entry.defenseRating)))} />
             <Row label="Average penalties" values={teams.map((team) => formatNumber(average(team.entries.map((entry) => entry.penalties))))} />
 
             {(["auto", "teleop", "endgame"] as const).flatMap((phase) => {

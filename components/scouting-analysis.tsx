@@ -19,6 +19,9 @@ type CloudEntry = {
   alliance?: "red" | "blue";
   gameData: Record<string, string | number | boolean | null>;
   defense: "none" | "light" | "heavy";
+  driverRating?: number;
+  playedDefense?: boolean;
+  defenseRating?: number;
   penalties: number;
   disabled: boolean;
   tipped: boolean;
@@ -35,15 +38,26 @@ type TeamSummary = {
 const listEventEntries = makeFunctionReference<"query">("analysis:listEventEntries");
 
 function average(values: number[]) {
-  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
 }
 
-function percent(value: number) {
-  return `${Math.round(value * 100)}%`;
+function percent(value: number | null) {
+  return value === null ? "—" : `${Math.round(value * 100)}%`;
 }
 
-function formatNumber(value: number) {
+function formatNumber(value: number | null) {
+  if (value === null) return "—";
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function averageOptional(entries: CloudEntry[], select: (entry: CloudEntry) => number | undefined) {
+  const values = entries.map(select).filter((value): value is number => typeof value === "number");
+  return average(values);
+}
+
+function booleanRate(entries: CloudEntry[], select: (entry: CloudEntry) => boolean | undefined) {
+  const values = entries.map(select).filter((value): value is boolean => typeof value === "boolean");
+  return values.length ? values.filter(Boolean).length / values.length : null;
 }
 
 export function ScoutingAnalysis() {
@@ -130,7 +144,10 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
 function TeamAnalysisCard({ team, fields }: { team: TeamSummary; fields: GameField[] }) {
   const entries = team.entries;
   const issueCount = entries.filter((entry) => entry.disabled || entry.tipped || entry.mechanicalIssue).length;
-  const heavyDefense = entries.filter((entry) => entry.defense === "heavy").length;
+  const heavilyGuarded = entries.filter((entry) => entry.defense === "heavy").length;
+  const avgDriverRating = averageOptional(entries, (entry) => entry.driverRating);
+  const playedDefenseRate = booleanRate(entries, (entry) => entry.playedDefense);
+  const avgDefenseRating = averageOptional(entries, (entry) => entry.defenseRating);
   const avgPenalties = average(entries.map((entry) => entry.penalties));
   const notes = entries.filter((entry) => entry.notes.trim()).slice(-3).reverse();
 
@@ -141,9 +158,12 @@ function TeamAnalysisCard({ team, fields }: { team: TeamSummary; fields: GameFie
         <div className="text-right"><div className="text-2xl font-bold text-white">{entries.length}</div><div className="text-xs text-slate-500">matches scouted</div></div>
       </header>
 
-      <div className="grid grid-cols-3 gap-px bg-blue-400/10">
+      <div className="grid grid-cols-2 gap-px bg-blue-400/10 sm:grid-cols-3">
         <SmallStat label="Reliability issues" value={percent(issueCount / entries.length)} />
-        <SmallStat label="Heavy defense" value={percent(heavyDefense / entries.length)} />
+        <SmallStat label="Heavily guarded" value={percent(heavilyGuarded / entries.length)} />
+        <SmallStat label="Avg driver rating" value={formatNumber(avgDriverRating)} />
+        <SmallStat label="Played defense" value={percent(playedDefenseRate)} />
+        <SmallStat label="Avg defense quality" value={formatNumber(avgDefenseRating)} />
         <SmallStat label="Avg penalties" value={formatNumber(avgPenalties)} />
       </div>
 
@@ -172,13 +192,13 @@ function FieldMetric({ field, entries }: { field: GameField; entries: CloudEntry
 
   if (field.type === "counter" || field.type === "number") {
     const nums = values.filter((value): value is number => typeof value === "number");
-    return <MetricBox label={field.label} value={nums.length ? formatNumber(average(nums)) : "—"} detail="average" />;
+    return <MetricBox label={field.label} value={formatNumber(average(nums))} detail="average" />;
   }
 
   if (field.type === "toggle") {
     const bools = values.filter((value): value is boolean => typeof value === "boolean");
-    const rate = bools.length ? bools.filter(Boolean).length / bools.length : 0;
-    return <MetricBox label={field.label} value={bools.length ? percent(rate) : "—"} detail="yes rate" />;
+    const rate = bools.length ? bools.filter(Boolean).length / bools.length : null;
+    return <MetricBox label={field.label} value={percent(rate)} detail="yes rate" />;
   }
 
   const strings = values.filter((value): value is string => typeof value === "string");

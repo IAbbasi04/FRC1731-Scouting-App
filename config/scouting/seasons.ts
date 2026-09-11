@@ -12,6 +12,9 @@ export interface GameField {
   type: GameFieldType;
   help?: string;
   options?: GameFieldOption[];
+  min?: number;
+  max?: number;
+  step?: number;
 }
 
 export interface SeasonScoutingConfig {
@@ -27,13 +30,27 @@ export const scoutingSeasons: SeasonScoutingConfig[] = [
     year: 2026,
     gameKey: "rebuilt",
     gameName: "REBUILT",
-    description: "Fuel production, field traversal, defense, and tower performance.",
+    description: "Fuel production, passing, field traversal, guarding, driver quality, and tower performance.",
     fields: [
-      { key: "autoFuelScoredEstimate", label: "Fuel scored (est.)", phase: "auto", type: "counter", help: "Best estimate of fuel contributed to the active hub." },
+      {
+        key: "autoStartLocation",
+        label: "Starting location",
+        phase: "auto",
+        type: "select",
+        help: "Alliance-relative starting position.",
+        options: [
+          { value: "under-left-trench", label: "Under left trench" },
+          { value: "left-bump", label: "Left bump" },
+          { value: "hub", label: "Hub" },
+          { value: "right-bump", label: "Right bump" },
+          { value: "under-right-trench", label: "Under right trench" },
+        ],
+      },
+      { key: "autoFuelScoredEstimate", label: "Fuel scored", phase: "auto", type: "counter", help: "Best estimate of fuel contributed to the active hub." },
       { key: "autoTower", label: "Auto tower", phase: "auto", type: "select", options: [{ value: "none", label: "None" }, { value: "level1", label: "Level 1" }] },
-      { key: "teleopFuelScoredEstimate", label: "Fuel scored (est.)", phase: "teleop", type: "counter" },
-      { key: "scoringCycles", label: "Scoring cycles", phase: "teleop", type: "counter" },
-      { key: "averageCycleSeconds", label: "Avg. cycle seconds", phase: "teleop", type: "number" },
+      { key: "teleopFuelScoredEstimate", label: "Fuel scored", phase: "teleop", type: "counter" },
+      { key: "teleopFuelPassed", label: "Fuel passed", phase: "teleop", type: "counter" },
+      { key: "teleopFieldGoalPercent", label: "Rough FG%", phase: "teleop", type: "number", min: 0, max: 100, step: 5, help: "Scout estimate from 0–100%." },
       { key: "usesTrench", label: "Uses trench", phase: "teleop", type: "toggle" },
       { key: "crossesBump", label: "Crosses bump", phase: "teleop", type: "toggle" },
       { key: "towerLevel", label: "Tower finish", phase: "endgame", type: "select", options: [{ value: "none", label: "None" }, { value: "level1", label: "Level 1" }, { value: "level2", label: "Level 2" }, { value: "level3", label: "Level 3" }] },
