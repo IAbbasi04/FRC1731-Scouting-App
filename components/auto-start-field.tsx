@@ -1,5 +1,6 @@
 "use client";
 
+import type { PointerEvent } from "react";
 import { Bot } from "lucide-react";
 import type { AllianceColor, FieldPoint } from "@/types/scouting";
 
@@ -15,7 +16,7 @@ function clamp(value: number) {
 }
 
 export function AutoStartField({ alliance, position, onAllianceChange, onPositionChange }: Props) {
-  function updateFromPointer(event: React.PointerEvent<HTMLDivElement>) {
+  function updateFromPointer(event: PointerEvent<HTMLDivElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
     const x = clamp(((event.clientX - rect.left) / rect.width) * 100);
     const y = clamp(((event.clientY - rect.top) / rect.height) * 100);
