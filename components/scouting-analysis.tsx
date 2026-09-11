@@ -75,7 +75,7 @@ function booleanRate(entries: CloudEntry[], select: (entry: CloudEntry) => boole
 function hasReportConflict(entries: CloudEntry[]) {
   if (entries.length < 2) return false;
 
-  const categoricalChecks = [
+  const categoricalChecks: unknown[][] = [
     entries.map((entry) => entry.disabled),
     entries.map((entry) => entry.tipped),
     entries.map((entry) => entry.mechanicalIssue),
