@@ -2,7 +2,18 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Download, Save, Trash2 } from "lucide-react";
-import type { DefenseLevel, EndgameResult, MatchScoutingEntry } from "@/types/scouting";
+import {
+  getScoutingSeason,
+  inferSeasonFromEventKey,
+  scoutingSeasons,
+  type GameField,
+} from "@/config/scouting/seasons";
+import type {
+  DefenseLevel,
+  MatchScoutingEntry,
+  ScoutingValue,
+  StoredScoutingEntry,
+} from "@/types/scouting";
 
 const STORAGE_KEY = "1731.match-scouting.entries.v1";
 
@@ -11,25 +22,25 @@ function numberOrZero(value: string) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 }
 
-function accuracy(scored: number, attempts: number) {
-  if (attempts <= 0) return "—";
-  return `${Math.round((scored / attempts) * 100)}%`;
+function defaultGameData(fields: GameField[]) {
+  return Object.fromEntries(fields.map((field) => {
+    if (field.type === "toggle") return [field.key, false];
+    if (field.type === "select") return [field.key, field.options?.[0]?.value ?? ""];
+    return [field.key, 0];
+  })) as Record<string, ScoutingValue>;
 }
 
 export function MatchScoutingForm() {
-  const [entries, setEntries] = useState<MatchScoutingEntry[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [entries, setEntries] = useState<StoredScoutingEntry[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [season, setSeason] = useState(2026);
+  const config = getScoutingSeason(season);
   const [eventKey, setEventKey] = useState("");
   const [matchNumber, setMatchNumber] = useState(1);
   const [teamNumber, setTeamNumber] = useState(1731);
   const [scoutName, setScoutName] = useState("");
-  const [autoAttempts, setAutoAttempts] = useState(0);
-  const [autoScored, setAutoScored] = useState(0);
-  const [teleopAttempts, setTeleopAttempts] = useState(0);
-  const [teleopScored, setTeleopScored] = useState(0);
-  const [averageCycleSeconds, setAverageCycleSeconds] = useState("");
-  const [endgame, setEndgame] = useState<EndgameResult>("none");
+  const [gameData, setGameData] = useState<Record<string, ScoutingValue>>(() => defaultGameData(config.fields));
   const [defense, setDefense] = useState<DefenseLevel>("none");
   const [penalties, setPenalties] = useState(0);
   const [disabled, setDisabled] = useState(false);
@@ -40,7 +51,7 @@ export function MatchScoutingForm() {
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored) setEntries(JSON.parse(stored) as MatchScoutingEntry[]);
+      if (stored) setEntries(JSON.parse(stored) as StoredScoutingEntry[]);
     } catch {
       setMessage("Saved scouting data could not be read on this device.");
     } finally {
@@ -53,7 +64,24 @@ export function MatchScoutingForm() {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
   }, [entries, hydrated]);
 
-  const recentEntries = useMemo(() => [...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 10), [entries]);
+  useEffect(() => {
+    setGameData(defaultGameData(config.fields));
+  }, [config]);
+
+  const recentEntries = useMemo(
+    () => [...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 10),
+    [entries],
+  );
+
+  function handleEventKey(value: string) {
+    setEventKey(value);
+    const inferred = inferSeasonFromEventKey(value);
+    if (inferred && scoutingSeasons.some((item) => item.year === inferred)) setSeason(inferred);
+  }
+
+  function setFieldValue(key: string, value: ScoutingValue) {
+    setGameData((current) => ({ ...current, [key]: value }));
+  }
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -63,26 +91,18 @@ export function MatchScoutingForm() {
       setMessage("Event, match, team, and scout name are required.");
       return;
     }
-    if (autoScored > autoAttempts || teleopScored > teleopAttempts) {
-      setMessage("Scored units cannot be greater than attempts.");
-      return;
-    }
 
     const entry: MatchScoutingEntry = {
       id: crypto.randomUUID(),
-      schemaVersion: 1,
+      schemaVersion: 2,
+      season: config.year,
+      gameKey: config.gameKey,
       eventKey: eventKey.trim().toLowerCase(),
       matchNumber,
       teamNumber,
       scoutName: scoutName.trim(),
       createdAt: new Date().toISOString(),
-      auto: { attempts: autoAttempts, scored: autoScored },
-      teleop: {
-        attempts: teleopAttempts,
-        scored: teleopScored,
-        averageCycleSeconds: averageCycleSeconds.trim() ? numberOrZero(averageCycleSeconds) : null,
-      },
-      endgame,
+      gameData,
       defense,
       penalties,
       disabled,
@@ -90,17 +110,13 @@ export function MatchScoutingForm() {
       mechanicalIssue,
       notes: notes.trim(),
       syncStatus: "local",
+      source: "manual",
     };
 
     setEntries((current) => [...current, entry]);
-    setMessage(`Saved Q${matchNumber} · Team ${teamNumber} locally.`);
+    setMessage(`Saved ${config.year} Q${matchNumber} · Team ${teamNumber} locally.`);
     setMatchNumber((current) => current + 1);
-    setAutoAttempts(0);
-    setAutoScored(0);
-    setTeleopAttempts(0);
-    setTeleopScored(0);
-    setAverageCycleSeconds("");
-    setEndgame("none");
+    setGameData(defaultGameData(config.fields));
     setDefense("none");
     setPenalties(0);
     setDisabled(false);
@@ -126,33 +142,57 @@ export function MatchScoutingForm() {
   return (
     <div className="grid gap-8 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
       <form onSubmit={submit} className="space-y-6 rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/85 p-5 sm:p-6">
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Event key"><input value={eventKey} onChange={(e) => setEventKey(e.target.value)} placeholder="2026vahay" className={inputClass} /></Field>
-          <Field label="Match"><input type="number" min={1} value={matchNumber} onChange={(e) => setMatchNumber(numberOrZero(e.target.value))} className={inputClass} /></Field>
-          <Field label="Team"><input type="number" min={1} value={teamNumber} onChange={(e) => setTeamNumber(numberOrZero(e.target.value))} className={inputClass} /></Field>
-          <Field label="Scout"><input value={scoutName} onChange={(e) => setScoutName(e.target.value)} placeholder="Name" className={inputClass} /></Field>
+        <section className="rounded-2xl border border-yellow-300/20 bg-yellow-300/5 p-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#ffd84d]">Season profile</div>
+              <h2 className="mt-1 text-2xl font-semibold text-white">{config.year} · {config.gameName}</h2>
+              <p className="mt-1 text-sm text-slate-400">{config.description}</p>
+            </div>
+            <select value={season} onChange={(event) => setSeason(Number(event.target.value))} className={`${inputClass} max-w-xs`}>
+              {scoutingSeasons.map((item) => <option key={item.year} value={item.year}>{item.year} · {item.gameName}</option>)}
+            </select>
+          </div>
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-2">
-          <ScoringSection title="Autonomous" attempts={autoAttempts} scored={autoScored} setAttempts={setAutoAttempts} setScored={setAutoScored} />
-          <ScoringSection title="Teleop" attempts={teleopAttempts} scored={teleopScored} setAttempts={setTeleopAttempts} setScored={setTeleopScored}>
-            <Field label="Avg. cycle seconds"><input inputMode="decimal" value={averageCycleSeconds} onChange={(e) => setAverageCycleSeconds(e.target.value)} placeholder="Optional" className={inputClass} /></Field>
-          </ScoringSection>
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label="Event key"><input value={eventKey} onChange={(event) => handleEventKey(event.target.value)} placeholder="2026vahay" className={inputClass} /></Field>
+          <Field label="Match"><input type="number" min={1} value={matchNumber} onChange={(event) => setMatchNumber(numberOrZero(event.target.value))} className={inputClass} /></Field>
+          <Field label="Team"><input type="number" min={1} value={teamNumber} onChange={(event) => setTeamNumber(numberOrZero(event.target.value))} className={inputClass} /></Field>
+          <Field label="Scout"><input value={scoutName} onChange={(event) => setScoutName(event.target.value)} placeholder="Name" className={inputClass} /></Field>
         </section>
+
+        {(["auto", "teleop", "endgame"] as const).map((phase) => {
+          const fields = config.fields.filter((field) => field.phase === phase);
+          if (fields.length === 0) return null;
+          return (
+            <section key={phase} className="rounded-2xl border border-blue-300/10 bg-[#07111f]/55 p-4">
+              <h2 className="mb-4 text-lg font-semibold capitalize text-[#ffd84d]">{phase}</h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {fields.map((field) => (
+                  <GameFieldControl
+                    key={field.key}
+                    field={field}
+                    value={gameData[field.key]}
+                    onChange={(value) => setFieldValue(field.key, value)}
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })}
 
         <section className="grid gap-4 md:grid-cols-3">
-          <ChoiceGroup title="Endgame" value={endgame} onChange={(value) => setEndgame(value as EndgameResult)} options={["none", "attempted", "successful"]} />
           <ChoiceGroup title="Defense" value={defense} onChange={(value) => setDefense(value as DefenseLevel)} options={["none", "light", "heavy"]} />
-          <Field label="Penalties"><input type="number" min={0} value={penalties} onChange={(e) => setPenalties(numberOrZero(e.target.value))} className={inputClass} /></Field>
+          <Field label="Penalties"><input type="number" min={0} value={penalties} onChange={(event) => setPenalties(numberOrZero(event.target.value))} className={inputClass} /></Field>
+          <div className="grid gap-2">
+            <Check label="Disabled" checked={disabled} onChange={setDisabled} />
+            <Check label="Tipped" checked={tipped} onChange={setTipped} />
+            <Check label="Mechanical issue" checked={mechanicalIssue} onChange={setMechanicalIssue} />
+          </div>
         </section>
 
-        <section className="grid gap-3 sm:grid-cols-3">
-          <Check label="Disabled" checked={disabled} onChange={setDisabled} />
-          <Check label="Tipped" checked={tipped} onChange={setTipped} />
-          <Check label="Mechanical issue" checked={mechanicalIssue} onChange={setMechanicalIssue} />
-        </section>
-
-        <Field label="Notes"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} placeholder="Driver quality, unusual behavior, strategy notes, failure details…" className={`${inputClass} resize-y`} /></Field>
+        <Field label="Notes"><textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} placeholder="Driver quality, unusual behavior, strategy notes, failure details…" className={`${inputClass} resize-y`} /></Field>
 
         {message ? <div className="rounded-xl border border-yellow-300/20 bg-yellow-300/5 p-3 text-sm text-yellow-100">{message}</div> : null}
 
@@ -162,7 +202,7 @@ export function MatchScoutingForm() {
       <aside className="space-y-4">
         <section className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/80 p-5">
           <div className="flex items-center justify-between gap-3">
-            <div><h2 className="font-semibold text-[#ffd84d]">Offline queue</h2><p className="mt-1 text-xs text-slate-500">Stored only on this browser until cloud sync is connected.</p></div>
+            <div><h2 className="font-semibold text-[#ffd84d]">Offline queue</h2><p className="mt-1 text-xs text-slate-500">Multiple seasons can coexist in the same local queue.</p></div>
             <div className="text-2xl font-bold text-white">{entries.length}</div>
           </div>
           <button type="button" disabled={entries.length === 0} onClick={exportEntries} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-300/20 px-4 py-2 text-sm font-medium text-slate-200 hover:border-[#ffd84d]/50 disabled:opacity-40"><Download size={16} /> Export JSON</button>
@@ -173,10 +213,13 @@ export function MatchScoutingForm() {
           {recentEntries.length === 0 ? <p className="p-4 text-sm text-slate-500">No scouting entries saved yet.</p> : <div className="divide-y divide-blue-400/10">{recentEntries.map((entry) => (
             <div key={entry.id} className="p-4">
               <div className="flex items-start justify-between gap-3">
-                <div><div className="font-semibold text-[#ffd84d]">Q{entry.matchNumber} · {entry.teamNumber}</div><div className="mt-1 text-xs text-slate-500">{entry.eventKey} · {entry.scoutName}</div></div>
+                <div>
+                  <div className="font-semibold text-[#ffd84d]">Q{entry.matchNumber} · {entry.teamNumber}</div>
+                  <div className="mt-1 text-xs text-slate-500">{entry.schemaVersion === 2 ? `${entry.season} · ${entry.gameKey}` : "Legacy entry"} · {entry.scoutName}</div>
+                </div>
                 <button type="button" onClick={() => removeEntry(entry.id)} className="rounded-lg p-2 text-slate-500 hover:bg-red-950/30 hover:text-red-300" aria-label="Delete entry"><Trash2 size={16} /></button>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-400"><span>Auto {entry.auto.scored}/{entry.auto.attempts} ({accuracy(entry.auto.scored, entry.auto.attempts)})</span><span>Teleop {entry.teleop.scored}/{entry.teleop.attempts} ({accuracy(entry.teleop.scored, entry.teleop.attempts)})</span></div>
+              <p className="mt-2 text-xs text-slate-500">{entry.eventKey}</p>
             </div>
           ))}</div>}
         </section>
@@ -191,12 +234,24 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label className="space-y-2 text-sm"><span className="font-medium text-slate-300">{label}</span>{children}</label>;
 }
 
-function ScoringSection({ title, attempts, scored, setAttempts, setScored, children }: { title: string; attempts: number; scored: number; setAttempts: (value: number) => void; setScored: (value: number) => void; children?: React.ReactNode }) {
-  return <div className="rounded-2xl border border-blue-300/10 bg-[#07111f]/55 p-4"><div className="mb-4 flex items-center justify-between"><h2 className="font-semibold text-[#ffd84d]">{title}</h2><span className="text-sm text-slate-500">Accuracy {accuracy(scored, attempts)}</span></div><div className="grid gap-3 sm:grid-cols-2"><Counter label="Attempts" value={attempts} setValue={setAttempts} /><Counter label="Scored" value={scored} setValue={setScored} />{children}</div></div>;
+function GameFieldControl({ field, value, onChange }: { field: GameField; value: ScoutingValue; onChange: (value: ScoutingValue) => void }) {
+  if (field.type === "toggle") {
+    return <Check label={field.label} checked={Boolean(value)} onChange={onChange} />;
+  }
+
+  if (field.type === "select") {
+    return <Field label={field.label}><select value={String(value ?? "")} onChange={(event) => onChange(event.target.value)} className={inputClass}>{field.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{field.help ? <p className="text-xs text-slate-600">{field.help}</p> : null}</Field>;
+  }
+
+  if (field.type === "number") {
+    return <Field label={field.label}><input type="number" min={0} step="0.1" value={Number(value ?? 0)} onChange={(event) => onChange(numberOrZero(event.target.value))} className={inputClass} />{field.help ? <p className="text-xs text-slate-600">{field.help}</p> : null}</Field>;
+  }
+
+  return <div className="space-y-2"><div className="text-sm font-medium text-slate-300">{field.label}</div><Counter value={Number(value ?? 0)} setValue={(next) => onChange(next)} />{field.help ? <p className="text-xs text-slate-600">{field.help}</p> : null}</div>;
 }
 
-function Counter({ label, value, setValue }: { label: string; value: number; setValue: (value: number) => void }) {
-  return <div className="space-y-2"><div className="text-sm text-slate-400">{label}</div><div className="grid grid-cols-[44px_1fr_44px] overflow-hidden rounded-xl border border-blue-300/20 bg-[#07111f]"><button type="button" onClick={() => setValue(Math.max(0, value - 1))} className="text-xl text-slate-300 hover:bg-[#0b5fff]/20">−</button><input type="number" min={0} value={value} onChange={(e) => setValue(numberOrZero(e.target.value))} className="min-w-0 bg-transparent py-2 text-center font-mono text-lg font-semibold text-white outline-none" /><button type="button" onClick={() => setValue(value + 1)} className="text-xl text-[#ffd84d] hover:bg-[#0b5fff]/20">+</button></div></div>;
+function Counter({ value, setValue }: { value: number; setValue: (value: number) => void }) {
+  return <div className="grid grid-cols-[44px_1fr_44px] overflow-hidden rounded-xl border border-blue-300/20 bg-[#07111f]"><button type="button" onClick={() => setValue(Math.max(0, value - 1))} className="text-xl text-slate-300 hover:bg-[#0b5fff]/20">−</button><input type="number" min={0} value={value} onChange={(event) => setValue(numberOrZero(event.target.value))} className="min-w-0 bg-transparent py-2 text-center font-mono text-lg font-semibold text-white outline-none" /><button type="button" onClick={() => setValue(value + 1)} className="text-xl text-[#ffd84d] hover:bg-[#0b5fff]/20">+</button></div>;
 }
 
 function ChoiceGroup({ title, value, onChange, options }: { title: string; value: string; onChange: (value: string) => void; options: string[] }) {
@@ -204,5 +259,5 @@ function ChoiceGroup({ title, value, onChange, options }: { title: string; value
 }
 
 function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
-  return <label className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm ${checked ? "border-red-400/40 bg-red-950/20 text-red-100" : "border-blue-300/15 bg-[#07111f]/60 text-slate-300"}`}><input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4 accent-[#ffd84d]" />{label}</label>;
+  return <label className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm ${checked ? "border-[#ffd84d]/50 bg-[#ffd84d]/10 text-yellow-100" : "border-blue-300/15 bg-[#07111f]/60 text-slate-300"}`}><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-4 w-4 accent-[#ffd84d]" />{label}</label>;
 }
