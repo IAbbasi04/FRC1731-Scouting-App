@@ -7,6 +7,7 @@ const nav = [
   { href: "/events", label: "Events", icon: Trophy },
   { href: "/teams", label: "Teams", icon: Users },
   { href: "/scouting", label: "Scouting", icon: ClipboardList },
+  { href: "/analysis", label: "Analysis", icon: BarChart3 },
   { href: "/compare", label: "Compare", icon: GitCompareArrows },
   { href: "/picklist", label: "Pick List", icon: ListChecks },
 ];
