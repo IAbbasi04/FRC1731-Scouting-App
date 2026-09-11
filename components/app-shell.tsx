@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BarChart3, ClipboardList, GitCompareArrows, Home, ListChecks, Trophy, Users } from "lucide-react";
 import { MetricPreferencesButton } from "@/components/metric-preferences-button";
+import { PwaRegistration } from "@/components/pwa-registration";
 
 const nav = [
   { href: "/", label: "Home", icon: Home },
@@ -15,6 +16,7 @@ const nav = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen">
+      <PwaRegistration />
       <header className="sticky top-0 z-50 border-b border-blue-400/20 bg-[#07111f]/92 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-3 font-semibold text-white">
