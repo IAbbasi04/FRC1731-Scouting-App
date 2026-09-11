@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
 import { MetricPreferencesProvider } from "@/components/metric-preferences";
+import { ScouterSessionProvider } from "@/components/scouter-session";
 
 export const metadata: Metadata = {
   title: "1731 Scouting",
@@ -12,9 +13,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
-        <MetricPreferencesProvider>
-          <AppShell>{children}</AppShell>
-        </MetricPreferencesProvider>
+        <ScouterSessionProvider>
+          <MetricPreferencesProvider>
+            <AppShell>{children}</AppShell>
+          </MetricPreferencesProvider>
+        </ScouterSessionProvider>
       </body>
     </html>
   );

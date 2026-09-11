@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Download, Save, Trash2 } from "lucide-react";
+import { useScouterSession } from "@/components/scouter-session";
 import {
   getScoutingSeason,
   inferSeasonFromEventKey,
@@ -38,6 +39,7 @@ function defaultGameData(fields: GameField[]) {
 }
 
 export function MatchScoutingForm() {
+  const { session } = useScouterSession();
   const [hydrated, setHydrated] = useState(false);
   const [entries, setEntries] = useState<StoredScoutingEntry[]>([]);
   const [message, setMessage] = useState<string | null>(null);
@@ -46,7 +48,6 @@ export function MatchScoutingForm() {
   const [eventKey, setEventKey] = useState("");
   const [matchNumber, setMatchNumber] = useState<number | "">(1);
   const [teamNumber, setTeamNumber] = useState<number | "">(1731);
-  const [scoutName, setScoutName] = useState("");
   const [alliance, setAlliance] = useState<AllianceColor>("red");
   const [gameData, setGameData] = useState<Record<string, ScoutingValue>>(() => defaultGameData(config.fields));
   const [defense, setDefense] = useState<DefenseLevel>("none");
@@ -102,8 +103,8 @@ export function MatchScoutingForm() {
     const resolvedTeamNumber = teamNumber === "" ? 0 : teamNumber;
     const resolvedPenalties = penalties === "" ? 0 : penalties;
 
-    if (!eventKey.trim() || !scoutName.trim() || resolvedTeamNumber <= 0 || resolvedMatchNumber <= 0) {
-      setMessage("Event, match, team, and scout name are required.");
+    if (!eventKey.trim() || resolvedTeamNumber <= 0 || resolvedMatchNumber <= 0) {
+      setMessage("Event, match, and team are required.");
       return;
     }
 
@@ -125,7 +126,7 @@ export function MatchScoutingForm() {
       eventKey: eventKey.trim().toLowerCase(),
       matchNumber: resolvedMatchNumber,
       teamNumber: resolvedTeamNumber,
-      scoutName: scoutName.trim(),
+      scoutName: session.name,
       createdAt: new Date().toISOString(),
       alliance,
       gameData: normalizedGameData,
@@ -187,13 +188,13 @@ export function MatchScoutingForm() {
           </div>
         </section>
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Event key"><input value={eventKey} onChange={(event) => handleEventKey(event.target.value)} placeholder="2026vahay" className={inputClass} /></Field>
           <Field label="Match"><input type="number" min={1} value={matchNumber} onChange={(event) => setMatchNumber(event.target.value === "" ? "" : numberOrZero(event.target.value))} className={inputClass} /></Field>
           <Field label="Team"><input type="number" min={1} value={teamNumber} onChange={(event) => setTeamNumber(event.target.value === "" ? "" : numberOrZero(event.target.value))} className={inputClass} /></Field>
-          <Field label="Scout"><input value={scoutName} onChange={(event) => setScoutName(event.target.value)} placeholder="Name" className={inputClass} /></Field>
           <Field label="Alliance"><select value={alliance} onChange={(event) => setAlliance(event.target.value as AllianceColor)} className={inputClass}><option value="red">Red</option><option value="blue">Blue</option></select></Field>
         </section>
+        <p className="-mt-3 text-xs text-slate-500">Scouting as <span className="font-medium text-slate-300">{session.name}</span>. Use Switch user in the header to change scouters.</p>
 
         {(["auto", "teleop", "endgame"] as const).map((phase) => {
           const fields = config.fields.filter((field) => field.phase === phase);

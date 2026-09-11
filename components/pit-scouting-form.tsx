@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Cloud, CloudOff, RefreshCw, Save, Users } from "lucide-react";
+import { useScouterSession } from "@/components/scouter-session";
 import { syncPendingPitEntries, syncPitEntry } from "@/lib/pit-scouting-sync";
 import type { TbaTeam } from "@/types/frc";
 import type {
@@ -36,6 +37,7 @@ function numericOrZero(value: string) {
 }
 
 export function PitScoutingForm() {
+  const { session } = useScouterSession();
   const [hydrated, setHydrated] = useState(false);
   const [online, setOnline] = useState(true);
   const [entries, setEntries] = useState<PitScoutingEntry[]>([]);
@@ -46,7 +48,6 @@ export function PitScoutingForm() {
 
   const [eventKey, setEventKey] = useState("");
   const [teamNumber, setTeamNumber] = useState("");
-  const [scoutName, setScoutName] = useState("");
   const [drivetrain, setDrivetrain] = useState<PitDrivetrain>("unknown");
   const [widthIn, setWidthIn] = useState("");
   const [lengthIn, setLengthIn] = useState("");
@@ -73,10 +74,9 @@ export function PitScoutingForm() {
     try {
       const rawPrefs = window.localStorage.getItem(PREFS_KEY);
       if (rawPrefs) {
-        const prefs = JSON.parse(rawPrefs) as { eventKey?: string; scoutName?: string };
+        const prefs = JSON.parse(rawPrefs) as { eventKey?: string };
         const savedEvent = prefs.eventKey ?? "";
         setEventKey(savedEvent);
-        setScoutName(prefs.scoutName ?? "");
         if (savedEvent) {
           const cachedTeams = window.localStorage.getItem(`${TEAM_CACHE_PREFIX}${savedEvent.toLowerCase()}`);
           if (cachedTeams) setTeams(JSON.parse(cachedTeams) as TbaTeam[]);
@@ -104,8 +104,8 @@ export function PitScoutingForm() {
 
   useEffect(() => {
     if (!hydrated) return;
-    window.localStorage.setItem(PREFS_KEY, JSON.stringify({ eventKey, scoutName }));
-  }, [eventKey, scoutName, hydrated]);
+    window.localStorage.setItem(PREFS_KEY, JSON.stringify({ eventKey }));
+  }, [eventKey, hydrated]);
 
   function persist(next: PitScoutingEntry[]) {
     setEntries(next);
@@ -193,8 +193,8 @@ export function PitScoutingForm() {
     setMessage(null);
     const normalizedEvent = eventKey.trim().toLowerCase();
     const parsedTeam = Number(teamNumber);
-    if (!normalizedEvent || !scoutName.trim() || !Number.isFinite(parsedTeam) || parsedTeam <= 0) {
-      setMessage("Event, team, and scout name are required.");
+    if (!normalizedEvent || !Number.isFinite(parsedTeam) || parsedTeam <= 0) {
+      setMessage("Event and team are required.");
       return;
     }
 
@@ -204,7 +204,7 @@ export function PitScoutingForm() {
       season: Number(normalizedEvent.slice(0, 4)) || new Date().getFullYear(),
       eventKey: normalizedEvent,
       teamNumber: parsedTeam,
-      scoutName: scoutName.trim(),
+      scoutName: session.name,
       createdAt: new Date().toISOString(),
       drivetrain,
       widthIn: numericOrNull(widthIn),
@@ -260,11 +260,11 @@ export function PitScoutingForm() {
     <div className="grid gap-8 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.55fr)]">
       <form onSubmit={submit} className="space-y-6 rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/85 p-5 sm:p-6">
         <section className="rounded-2xl border border-yellow-300/20 bg-yellow-300/5 p-4">
-          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
             <Field label="Event key"><input value={eventKey} onChange={(event) => setEventKey(event.target.value)} placeholder="2026vaale" className={inputClass} /></Field>
-            <Field label="Scout name"><input value={scoutName} onChange={(event) => setScoutName(event.target.value)} placeholder="Name" className={inputClass} /></Field>
             <button type="button" onClick={loadTeams} disabled={loadingTeams || !eventKey.trim()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0b5fff] px-4 py-2.5 font-semibold text-white hover:bg-blue-500 disabled:opacity-50"><Users size={16} />{loadingTeams ? "Loading…" : "Load teams"}</button>
           </div>
+          <p className="mt-3 text-xs text-slate-500">Scouting as <span className="font-medium text-slate-300">{session.name}</span>. Use Switch user in the header to change scouters.</p>
           <div className="mt-4">
             <Field label="Team">
               {teams.length ? (
