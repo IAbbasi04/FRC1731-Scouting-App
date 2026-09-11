@@ -1,5 +1,5 @@
-const CACHE_NAME = "1731-scouting-v1";
-const APP_SHELL = ["/", "/scouting", "/manifest.webmanifest", "/icon.svg"];
+const CACHE_NAME = "1731-scouting-v2";
+const APP_SHELL = ["/", "/scouting", "/pit-scouting", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -54,6 +54,7 @@ self.addEventListener("fetch", (event) => {
         .catch(async () => {
           return (
             (await caches.match(request)) ||
+            (url.pathname.startsWith("/pit-scouting") ? await caches.match("/pit-scouting") : null) ||
             (url.pathname.startsWith("/scouting") ? await caches.match("/scouting") : null) ||
             (await caches.match("/")) ||
             Response.error()
