@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
+import { MetricPreferencesProvider } from "@/components/metric-preferences";
 
 export const metadata: Metadata = {
   title: "1731 Scouting",
@@ -10,7 +11,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body><AppShell>{children}</AppShell></body>
+      <body>
+        <MetricPreferencesProvider>
+          <AppShell>{children}</AppShell>
+        </MetricPreferencesProvider>
+      </body>
     </html>
   );
 }
