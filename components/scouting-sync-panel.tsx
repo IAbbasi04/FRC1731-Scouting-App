@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Cloud, CloudOff, RefreshCw } from "lucide-react";
 import { isCloudSyncConfigured, syncPendingEntries } from "@/lib/scouting-sync";
 import type { MatchScoutingEntry, StoredScoutingEntry } from "@/types/scouting";
 
 const STORAGE_KEY = "1731.match-scouting.entries.v1";
+const QUEUE_UPDATED_EVENT = "1731:scouting-queue-updated";
+const QUEUE_SYNCED_EVENT = "1731:scouting-queue-synced";
 
 function loadEntries(): StoredScoutingEntry[] {
   try {
@@ -21,6 +23,7 @@ export function ScoutingSyncPanel() {
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(true);
+  const syncingRef = useRef(false);
   const configured = isCloudSyncConfigured();
 
   const refresh = useCallback(() => {
@@ -35,6 +38,8 @@ export function ScoutingSyncPanel() {
   const synced = modernEntries.length - pending.length;
 
   const syncNow = useCallback(async (automatic = false) => {
+    if (syncingRef.current) return;
+
     const latest = loadEntries();
     const pendingLatest = latest.filter(
       (entry): entry is MatchScoutingEntry => entry.schemaVersion === 2 && entry.syncStatus !== "synced",
@@ -56,16 +61,19 @@ export function ScoutingSyncPanel() {
       return;
     }
 
+    syncingRef.current = true;
     setSyncing(true);
     try {
       const { syncedIds, failedIds } = await syncPendingEntries(pendingLatest);
       const syncedSet = new Set(syncedIds);
-      const updated = latest.map((entry) => {
+      const latestAfterSync = loadEntries();
+      const updated = latestAfterSync.map((entry) => {
         if (entry.schemaVersion !== 2 || !syncedSet.has(entry.id)) return entry;
         return { ...entry, syncStatus: "synced" as const };
       });
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       setEntries(updated);
+      window.dispatchEvent(new Event(QUEUE_SYNCED_EVENT));
       setMessage(
         failedIds.length === 0
           ? `${automatic ? "Connection restored — " : ""}synced ${syncedIds.length} entr${syncedIds.length === 1 ? "y" : "ies"}.`
@@ -74,6 +82,7 @@ export function ScoutingSyncPanel() {
     } catch (error) {
       if (!automatic) setMessage(error instanceof Error ? error.message : "Cloud sync failed. Entries remain saved locally.");
     } finally {
+      syncingRef.current = false;
       setSyncing(false);
     }
   }, [configured]);
@@ -91,20 +100,33 @@ export function ScoutingSyncPanel() {
       setIsOnline(false);
       setMessage("Offline mode active. New scouting entries will stay on this device until connectivity returns.");
     };
+    const handleQueueUpdated = () => {
+      refresh();
+      if (navigator.onLine) void syncNow(true);
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== STORAGE_KEY) return;
+      refresh();
+      if (navigator.onLine) void syncNow(true);
+    };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
+    window.addEventListener(QUEUE_UPDATED_EVENT, handleQueueUpdated);
+    window.addEventListener("storage", handleStorage);
 
     if (navigator.onLine) void syncNow(true);
 
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      window.removeEventListener(QUEUE_UPDATED_EVENT, handleQueueUpdated);
+      window.removeEventListener("storage", handleStorage);
     };
   }, [refresh, syncNow]);
 
   return (
-    <section className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/80 p-5 sm:p-6">
+    <section className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/80 p-4 sm:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
@@ -115,7 +137,7 @@ export function ScoutingSyncPanel() {
             </span>
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            Entries are always saved locally first. When the device reconnects, pending entries automatically retry cloud sync.
+            Entries are saved locally before sync. New or pending entries retry automatically while online and when connectivity returns.
           </p>
         </div>
         <div className="flex gap-5 text-sm">
@@ -129,12 +151,12 @@ export function ScoutingSyncPanel() {
           type="button"
           onClick={() => void syncNow(false)}
           disabled={syncing || !isOnline}
-          className="inline-flex items-center gap-2 rounded-xl bg-[#0b5fff] px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+          className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#0b5fff] px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
         >
           <RefreshCw size={16} className={syncing ? "animate-spin" : ""} />
           {syncing ? "Syncing…" : isOnline ? "Sync pending" : "Waiting for connection"}
         </button>
-        <button type="button" onClick={refresh} className="rounded-xl border border-blue-300/20 px-4 py-2.5 text-sm text-slate-300 hover:border-[#ffd84d]/50">
+        <button type="button" onClick={refresh} className="min-h-11 rounded-xl border border-blue-300/20 px-4 py-2.5 text-sm text-slate-300 hover:border-[#ffd84d]/50">
           Refresh queue
         </button>
       </div>
