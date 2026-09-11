@@ -3,7 +3,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 export type PublicMetricKey = "epa" | "opr" | "dpr" | "ccwm";
-
 export type MetricVisibility = Record<PublicMetricKey, boolean>;
 
 const STORAGE_KEY = "1731.metric-visibility.v1";
@@ -25,21 +24,26 @@ const MetricPreferencesContext = createContext<MetricPreferencesContextValue | n
 
 export function MetricPreferencesProvider({ children }: { children: React.ReactNode }) {
   const [visibility, setVisibility] = useState<MetricVisibility>(defaultVisibility);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (!stored) return;
-      const parsed = JSON.parse(stored) as Partial<MetricVisibility>;
-      setVisibility({ ...defaultVisibility, ...parsed });
+      if (stored) {
+        const parsed = JSON.parse(stored) as Partial<MetricVisibility>;
+        setVisibility({ ...defaultVisibility, ...parsed });
+      }
     } catch {
       // A damaged local preference should never stop the scouting app from loading.
+    } finally {
+      setHydrated(true);
     }
   }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(visibility));
-  }, [visibility]);
+  }, [hydrated, visibility]);
 
   const value = useMemo<MetricPreferencesContextValue>(() => ({
     visibility,
