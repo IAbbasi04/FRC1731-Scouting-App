@@ -61,9 +61,10 @@ export const listEventEntries = queryGeneric({
 export const listTeamEntries = queryGeneric({
   args: { eventKey: v.string(), teamNumber: v.number() },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const entries = await ctx.db
       .query("pitScoutingEntries")
-      .withIndex("by_event_team", (q) => q.eq("eventKey", args.eventKey.toLowerCase()).eq("teamNumber", args.teamNumber))
+      .withIndex("by_event", (q) => q.eq("eventKey", args.eventKey.toLowerCase()))
       .collect();
+    return entries.filter((entry) => entry.teamNumber === args.teamNumber);
   },
 });
