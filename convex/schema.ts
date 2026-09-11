@@ -12,6 +12,8 @@ export default defineSchema({
     teamNumber: v.number(),
     scoutName: v.string(),
     createdAt: v.string(),
+    alliance: v.optional(v.union(v.literal("red"), v.literal("blue"))),
+    autoStart: v.optional(v.object({ x: v.number(), y: v.number() })),
     gameData: v.any(),
     defense: v.union(v.literal("none"), v.literal("light"), v.literal("heavy")),
     penalties: v.number(),

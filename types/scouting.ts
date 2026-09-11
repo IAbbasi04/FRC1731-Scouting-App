@@ -1,5 +1,12 @@
+export type EndgameResult = "none" | "attempted" | "successful";
 export type DefenseLevel = "none" | "light" | "heavy";
 export type ScoutingValue = string | number | boolean | null;
+export type AllianceColor = "red" | "blue";
+
+export interface FieldPoint {
+  x: number;
+  y: number;
+}
 
 export interface MatchScoutingEntry {
   id: string;
@@ -11,6 +18,8 @@ export interface MatchScoutingEntry {
   teamNumber: number;
   scoutName: string;
   createdAt: string;
+  alliance?: AllianceColor;
+  autoStart?: FieldPoint;
   gameData: Record<string, ScoutingValue>;
   defense: DefenseLevel;
   penalties: number;
