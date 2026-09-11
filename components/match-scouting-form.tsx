@@ -18,6 +18,7 @@ function accuracy(scored: number, attempts: number) {
 
 export function MatchScoutingForm() {
   const [entries, setEntries] = useState<MatchScoutingEntry[]>([]);
+  const [hydrated, setHydrated] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [eventKey, setEventKey] = useState("");
   const [matchNumber, setMatchNumber] = useState(1);
@@ -42,12 +43,15 @@ export function MatchScoutingForm() {
       if (stored) setEntries(JSON.parse(stored) as MatchScoutingEntry[]);
     } catch {
       setMessage("Saved scouting data could not be read on this device.");
+    } finally {
+      setHydrated(true);
     }
   }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-  }, [entries]);
+  }, [entries, hydrated]);
 
   const recentEntries = useMemo(() => [...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 10), [entries]);
 
