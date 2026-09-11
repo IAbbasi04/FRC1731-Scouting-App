@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getEventDashboard } from "@/lib/event-dashboard";
 import { TeamEventMetrics, TeamEventSnapshot } from "@/components/team-event-metrics";
+import { TeamScoutingSummary } from "@/components/team-scouting-summary";
 
 export default async function TeamEventProfilePage({
   params,
@@ -35,6 +36,7 @@ export default async function TeamEventProfilePage({
 
       <TeamEventMetrics team={team} />
       <TeamEventSnapshot team={team} matchCount={teamMatches.length} />
+      <TeamScoutingSummary eventKey={event} teamNumber={teamNumber} />
 
       <section className="overflow-hidden rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/70">
         <div className="border-b border-blue-400/10 bg-[#11243d] px-5 py-3"><h2 className="font-semibold text-[#ffd84d]">Matches</h2></div>

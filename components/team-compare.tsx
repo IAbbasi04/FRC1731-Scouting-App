@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import type { EventDashboard, EventDashboardTeam } from "@/types/frc";
 import { useMetricPreferences } from "@/components/metric-preferences";
+import { ScoutingCompareStrip } from "@/components/team-scouting-summary";
 
 const metricConfig = [
   { key: "epa", label: "EPA" },
@@ -117,6 +118,8 @@ export function TeamCompare() {
               </article>
             ))}
           </section>
+
+          <ScoutingCompareStrip eventKey={dashboard.event.key} teamNumbers={teams.map((team) => team.teamNumber)} />
 
           {visibleMetrics.length > 0 ? (
             <section className="space-y-5">
