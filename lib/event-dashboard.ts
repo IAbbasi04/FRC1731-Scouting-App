@@ -21,8 +21,9 @@ export async function getEventDashboard(eventKey: string): Promise<EventDashboar
     getEventOprs(eventKey),
   ]);
 
+  const rankingRows = rankings?.rankings ?? [];
   const rankingByTeam = new Map(
-    (rankings.rankings ?? []).map((row) => [teamNumberFromKey(row.team_key), row]),
+    rankingRows.map((row) => [teamNumberFromKey(row.team_key), row]),
   );
 
   const epaEntries = await Promise.all(
@@ -67,7 +68,7 @@ export async function getEventDashboard(eventKey: string): Promise<EventDashboar
   return {
     event,
     teams: teamRows,
-    rankings: rankings.rankings ?? [],
+    rankings: rankingRows,
     matches: sortedMatches,
   };
 }
