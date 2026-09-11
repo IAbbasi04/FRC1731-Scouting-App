@@ -2,7 +2,6 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Download, Save, Trash2 } from "lucide-react";
-import { AutoStartField } from "@/components/auto-start-field";
 import {
   getScoutingSeason,
   inferSeasonFromEventKey,
@@ -12,7 +11,6 @@ import {
 import type {
   AllianceColor,
   DefenseLevel,
-  FieldPoint,
   MatchScoutingEntry,
   ScoutingValue,
   StoredScoutingEntry,
@@ -25,11 +23,17 @@ function numberOrZero(value: string) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 }
 
+function numberWithinRange(value: string, min = 0, max = Number.POSITIVE_INFINITY) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return min;
+  return Math.min(max, Math.max(min, parsed));
+}
+
 function defaultGameData(fields: GameField[]) {
   return Object.fromEntries(fields.map((field) => {
     if (field.type === "toggle") return [field.key, false];
     if (field.type === "select") return [field.key, field.options?.[0]?.value ?? ""];
-    return [field.key, 0];
+    return [field.key, field.min ?? 0];
   })) as Record<string, ScoutingValue>;
 }
 
@@ -44,9 +48,11 @@ export function MatchScoutingForm() {
   const [teamNumber, setTeamNumber] = useState(1731);
   const [scoutName, setScoutName] = useState("");
   const [alliance, setAlliance] = useState<AllianceColor>("red");
-  const [autoStart, setAutoStart] = useState<FieldPoint>({ x: 14, y: 50 });
   const [gameData, setGameData] = useState<Record<string, ScoutingValue>>(() => defaultGameData(config.fields));
   const [defense, setDefense] = useState<DefenseLevel>("none");
+  const [driverRating, setDriverRating] = useState(5);
+  const [playedDefense, setPlayedDefense] = useState(false);
+  const [defenseRating, setDefenseRating] = useState(5);
   const [penalties, setPenalties] = useState(0);
   const [disabled, setDisabled] = useState(false);
   const [tipped, setTipped] = useState(false);
@@ -71,7 +77,6 @@ export function MatchScoutingForm() {
 
   useEffect(() => {
     setGameData(defaultGameData(config.fields));
-    setAutoStart({ x: 14, y: 50 });
   }, [config]);
 
   const recentEntries = useMemo(
@@ -109,9 +114,11 @@ export function MatchScoutingForm() {
       scoutName: scoutName.trim(),
       createdAt: new Date().toISOString(),
       alliance,
-      autoStart: config.year === 2026 ? autoStart : undefined,
       gameData,
       defense,
+      driverRating,
+      playedDefense,
+      defenseRating: playedDefense ? defenseRating : undefined,
       penalties,
       disabled,
       tipped,
@@ -125,8 +132,10 @@ export function MatchScoutingForm() {
     setMessage(`Saved ${config.year} Q${matchNumber} · Team ${teamNumber} locally.`);
     setMatchNumber((current) => current + 1);
     setGameData(defaultGameData(config.fields));
-    setAutoStart({ x: 14, y: 50 });
     setDefense("none");
+    setDriverRating(5);
+    setPlayedDefense(false);
+    setDefenseRating(5);
     setPenalties(0);
     setDisabled(false);
     setTipped(false);
@@ -164,25 +173,13 @@ export function MatchScoutingForm() {
           </div>
         </section>
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Field label="Event key"><input value={eventKey} onChange={(event) => handleEventKey(event.target.value)} placeholder="2026vahay" className={inputClass} /></Field>
           <Field label="Match"><input type="number" min={1} value={matchNumber} onChange={(event) => setMatchNumber(numberOrZero(event.target.value))} className={inputClass} /></Field>
           <Field label="Team"><input type="number" min={1} value={teamNumber} onChange={(event) => setTeamNumber(numberOrZero(event.target.value))} className={inputClass} /></Field>
           <Field label="Scout"><input value={scoutName} onChange={(event) => setScoutName(event.target.value)} placeholder="Name" className={inputClass} /></Field>
+          <Field label="Alliance"><select value={alliance} onChange={(event) => setAlliance(event.target.value as AllianceColor)} className={inputClass}><option value="red">Red</option><option value="blue">Blue</option></select></Field>
         </section>
-
-        {config.year === 2026 ? (
-          <AutoStartField
-            alliance={alliance}
-            position={autoStart}
-            onAllianceChange={setAlliance}
-            onPositionChange={setAutoStart}
-          />
-        ) : (
-          <section className="rounded-2xl border border-blue-300/10 bg-[#07111f]/45 p-4 text-sm text-slate-500">
-            Field start-position mapping is currently configured for 2026. The coordinate format is season-neutral, so historical maps can be added without changing the database.
-          </section>
-        )}
 
         {(["auto", "teleop", "endgame"] as const).map((phase) => {
           const fields = config.fields.filter((field) => field.phase === phase);
@@ -204,17 +201,37 @@ export function MatchScoutingForm() {
           );
         })}
 
-        <section className="grid gap-4 md:grid-cols-3">
-          <ChoiceGroup title="Defense" value={defense} onChange={(value) => setDefense(value as DefenseLevel)} options={["none", "light", "heavy"]} />
+        <section className="rounded-2xl border border-blue-300/10 bg-[#07111f]/55 p-4">
+          <h2 className="mb-4 text-lg font-semibold text-[#ffd84d]">Driver & defense</h2>
+          <div className="grid gap-5 lg:grid-cols-3">
+            <RatingSlider label="Driver rating" value={driverRating} onChange={setDriverRating} />
+            <ChoiceGroup
+              title="How guarded was this team?"
+              value={defense}
+              onChange={(value) => setDefense(value as DefenseLevel)}
+              options={[
+                { value: "none", label: "Not guarded" },
+                { value: "light", label: "Lightly guarded" },
+                { value: "heavy", label: "Heavily guarded" },
+              ]}
+            />
+            <div className="space-y-3">
+              <Check label="Played defense" checked={playedDefense} onChange={setPlayedDefense} />
+              {playedDefense ? <RatingSlider label="Defense quality" value={defenseRating} onChange={setDefenseRating} /> : <p className="px-1 text-xs text-slate-600">Enable this when the team spent meaningful time defending an opponent.</p>}
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-2">
           <Field label="Penalties"><input type="number" min={0} value={penalties} onChange={(event) => setPenalties(numberOrZero(event.target.value))} className={inputClass} /></Field>
-          <div className="grid gap-2">
+          <div className="grid gap-2 sm:grid-cols-3">
             <Check label="Disabled" checked={disabled} onChange={setDisabled} />
             <Check label="Tipped" checked={tipped} onChange={setTipped} />
             <Check label="Mechanical issue" checked={mechanicalIssue} onChange={setMechanicalIssue} />
           </div>
         </section>
 
-        <Field label="Notes"><textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} placeholder="Driver quality, unusual behavior, strategy notes, failure details…" className={`${inputClass} resize-y`} /></Field>
+        <Field label="Notes"><textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} placeholder="Strategy notes, unusual behavior, failure details…" className={`${inputClass} resize-y`} /></Field>
 
         {message ? <div className="rounded-xl border border-yellow-300/20 bg-yellow-300/5 p-3 text-sm text-yellow-100">{message}</div> : null}
 
@@ -258,7 +275,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function GameFieldControl({ field, value, onChange }: { field: GameField; value: ScoutingValue; onChange: (value: ScoutingValue) => void }) {
   if (field.type === "toggle") {
-    return <Check label={field.label} checked={Boolean(value)} onChange={onChange} />;
+    return <Check label={field.label} checked={Boolean(value)} onChange={(checked) => onChange(checked)} />;
   }
 
   if (field.type === "select") {
@@ -266,7 +283,9 @@ function GameFieldControl({ field, value, onChange }: { field: GameField; value:
   }
 
   if (field.type === "number") {
-    return <Field label={field.label}><input type="number" min={0} step="0.1" value={Number(value ?? 0)} onChange={(event) => onChange(numberOrZero(event.target.value))} className={inputClass} />{field.help ? <p className="text-xs text-slate-600">{field.help}</p> : null}</Field>;
+    const min = field.min ?? 0;
+    const max = field.max;
+    return <Field label={field.label}><input type="number" min={min} max={max} step={field.step ?? 0.1} value={Number(value ?? min)} onChange={(event) => onChange(numberWithinRange(event.target.value, min, max ?? Number.POSITIVE_INFINITY))} className={inputClass} />{field.help ? <p className="text-xs text-slate-600">{field.help}</p> : null}</Field>;
   }
 
   return <div className="space-y-2"><div className="text-sm font-medium text-slate-300">{field.label}</div><Counter value={Number(value ?? 0)} setValue={(next) => onChange(next)} />{field.help ? <p className="text-xs text-slate-600">{field.help}</p> : null}</div>;
@@ -276,8 +295,21 @@ function Counter({ value, setValue }: { value: number; setValue: (value: number)
   return <div className="grid grid-cols-[44px_1fr_44px] overflow-hidden rounded-xl border border-blue-300/20 bg-[#07111f]"><button type="button" onClick={() => setValue(Math.max(0, value - 1))} className="text-xl text-slate-300 hover:bg-[#0b5fff]/20">−</button><input type="number" min={0} value={value} onChange={(event) => setValue(numberOrZero(event.target.value))} className="min-w-0 bg-transparent py-2 text-center font-mono text-lg font-semibold text-white outline-none" /><button type="button" onClick={() => setValue(value + 1)} className="text-xl text-[#ffd84d] hover:bg-[#0b5fff]/20">+</button></div>;
 }
 
-function ChoiceGroup({ title, value, onChange, options }: { title: string; value: string; onChange: (value: string) => void; options: string[] }) {
-  return <div className="space-y-2"><div className="text-sm font-medium text-slate-300">{title}</div><div className="grid gap-2">{options.map((option) => <button key={option} type="button" onClick={() => onChange(option)} className={`rounded-xl border px-3 py-2 text-sm capitalize ${value === option ? "border-[#ffd84d]/60 bg-[#ffd84d]/10 text-[#ffd84d]" : "border-blue-300/15 bg-[#07111f] text-slate-400"}`}>{option}</button>)}</div></div>;
+function RatingSlider({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
+  return (
+    <div className="space-y-3 rounded-xl border border-blue-300/15 bg-[#07111f]/60 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium text-slate-300">{label}</span>
+        <span className="min-w-10 rounded-lg bg-[#11243d] px-2 py-1 text-center font-mono text-lg font-bold text-[#ffd84d]">{value}</span>
+      </div>
+      <input type="range" min={0} max={10} step={1} value={value} onChange={(event) => onChange(Number(event.target.value))} className="w-full accent-[#ffd84d]" />
+      <div className="flex justify-between text-[11px] text-slate-600"><span>0</span><span>10</span></div>
+    </div>
+  );
+}
+
+function ChoiceGroup({ title, value, onChange, options }: { title: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) {
+  return <div className="space-y-2"><div className="text-sm font-medium text-slate-300">{title}</div><div className="grid gap-2">{options.map((option) => <button key={option.value} type="button" onClick={() => onChange(option.value)} className={`rounded-xl border px-3 py-2 text-sm ${value === option.value ? "border-[#ffd84d]/60 bg-[#ffd84d]/10 text-[#ffd84d]" : "border-blue-300/15 bg-[#07111f] text-slate-400"}`}>{option.label}</button>)}</div></div>;
 }
 
 function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
