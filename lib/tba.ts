@@ -48,5 +48,5 @@ export function getEventsForYear(year: number) {
 }
 
 export function getTeamsForYearPage(page: number, year: number) {
-  return tbaFetch<TbaTeam[]>(`/teams/${page}/${year}`, 3600);
+  return tbaFetch<TbaTeam[]>(`/teams/${year}/${page}`, 3600);
 }
