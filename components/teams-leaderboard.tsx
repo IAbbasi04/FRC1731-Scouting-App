@@ -5,6 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, Search, Trophy } from "lucide-react";
 
 type SortMetric = "peakOpr" | "averageOpr" | "latestOpr";
+type DistrictFilter = "all" | "none" | string;
+
+type DistrictOption = {
+  key: string;
+  abbreviation: string;
+  displayName: string;
+};
 
 type TeamRow = {
   teamNumber: number;
@@ -19,14 +26,17 @@ type TeamRow = {
   latestEventName: string;
   latestEventDate: string;
   eventCount: number;
+  districtKeys: string[];
 };
 
 type LeaderboardResponse = {
   year: number;
   generatedAt: string;
   eventCount: number;
+  excludedOffseasonEventCount: number;
   eventsWithOpr: number;
   teamCount: number;
+  districts: DistrictOption[];
   teams: TeamRow[];
 };
 
@@ -47,6 +57,7 @@ export function TeamsLeaderboard() {
   const [year, setYear] = useState(currentYear);
   const [data, setData] = useState<LeaderboardResponse | null>(null);
   const [sortMetric, setSortMetric] = useState<SortMetric>("peakOpr");
+  const [districtFilter, setDistrictFilter] = useState<DistrictFilter>("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -63,6 +74,7 @@ export function TeamsLeaderboard() {
         throw new Error("error" in payload && payload.error ? payload.error : "Could not load team rankings.");
       }
       setData(payload);
+      setDistrictFilter("all");
     } catch (error) {
       setData(null);
       setMessage(error instanceof Error ? error.message : "Could not load team rankings.");
@@ -78,20 +90,27 @@ export function TeamsLeaderboard() {
   const filtered = useMemo(() => {
     if (!data) return [];
     const query = search.trim().toLowerCase();
+
+    const districtRows = data.teams.filter((team) => {
+      if (districtFilter === "all") return true;
+      if (districtFilter === "none") return team.districtKeys.length === 0;
+      return team.districtKeys.includes(districtFilter);
+    });
+
     const rows = query
-      ? data.teams.filter((team) =>
+      ? districtRows.filter((team) =>
           [team.teamNumber, team.nickname, team.city, team.stateProv, team.country]
             .filter((value) => value !== null && value !== undefined)
             .some((value) => String(value).toLowerCase().includes(query)),
         )
-      : data.teams;
+      : districtRows;
 
     return [...rows].sort((a, b) => b[sortMetric] - a[sortMetric] || a.teamNumber - b.teamNumber);
-  }, [data, search, sortMetric]);
+  }, [data, districtFilter, search, sortMetric]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, sortMetric]);
+  }, [search, sortMetric, districtFilter]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const visible = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -101,19 +120,37 @@ export function TeamsLeaderboard() {
     <div className="space-y-5">
       <section className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/85 p-4 sm:p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="grid flex-1 gap-3 sm:grid-cols-[auto_minmax(12rem,18rem)_minmax(16rem,1fr)] sm:items-end">
             <label className="space-y-2 text-sm">
               <span className="font-medium text-slate-300">Season</span>
               <select
                 value={year}
                 onChange={(event) => setYear(Number(event.target.value))}
-                className="min-h-11 rounded-xl border border-blue-300/20 bg-[#07111f] px-3 py-2.5 text-white outline-none focus:border-[#0b5fff]"
+                className="min-h-11 w-full rounded-xl border border-blue-300/20 bg-[#07111f] px-3 py-2.5 text-white outline-none focus:border-[#0b5fff]"
               >
                 {years.map((item) => <option key={item} value={item}>{item}</option>)}
               </select>
             </label>
 
-            <label className="min-w-0 flex-1 space-y-2 text-sm sm:min-w-72">
+            <label className="space-y-2 text-sm">
+              <span className="font-medium text-slate-300">District</span>
+              <select
+                value={districtFilter}
+                onChange={(event) => setDistrictFilter(event.target.value)}
+                disabled={!data}
+                className="min-h-11 w-full rounded-xl border border-blue-300/20 bg-[#07111f] px-3 py-2.5 text-white outline-none focus:border-[#0b5fff] disabled:opacity-50"
+              >
+                <option value="all">All districts</option>
+                {data?.districts.map((district) => (
+                  <option key={district.key} value={district.key}>
+                    {district.displayName} ({district.abbreviation.toUpperCase()})
+                  </option>
+                ))}
+                <option value="none">No district</option>
+              </select>
+            </label>
+
+            <label className="min-w-0 space-y-2 text-sm">
               <span className="font-medium text-slate-300">Search teams</span>
               <div className="relative">
                 <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" />
@@ -168,7 +205,7 @@ export function TeamsLeaderboard() {
         <>
           <section className="grid gap-3 sm:grid-cols-3">
             <StatCard label="Teams with OPR" value={data.teamCount.toLocaleString()} />
-            <StatCard label="Events with OPR" value={`${data.eventsWithOpr}/${data.eventCount}`} />
+            <StatCard label="Official events with OPR" value={`${data.eventsWithOpr}/${data.eventCount}`} />
             <StatCard label="Current view" value={`${filtered.length.toLocaleString()} teams`} />
           </section>
 
@@ -224,7 +261,7 @@ export function TeamsLeaderboard() {
               </table>
             </div>
 
-            {!visible.length ? <div className="px-4 py-10 text-center text-sm text-slate-500">No teams match that search.</div> : null}
+            {!visible.length ? <div className="px-4 py-10 text-center text-sm text-slate-500">No teams match those filters.</div> : null}
           </section>
 
           <div className="flex flex-col gap-3 rounded-xl border border-blue-400/10 bg-[#07111f]/45 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
@@ -239,7 +276,7 @@ export function TeamsLeaderboard() {
           </div>
 
           <p className="px-1 text-xs text-slate-600">
-            OPR is sourced from The Blue Alliance event OPR tables. Peak is the best event value, Average is the arithmetic mean across events with OPR, and Latest is the value from the most recent event with OPR data. Missing event OPRs are excluded rather than counted as zero.
+            OPR is sourced from The Blue Alliance event OPR tables. Offseason events are excluded. Peak is the best official-event value, Average is the arithmetic mean across official events with OPR, and Latest is the value from the most recent official event with OPR data. District filters are based on official district-event participation; “No district” contains teams with no district event in that season. Missing event OPRs are excluded rather than counted as zero.
           </p>
         </>
       ) : null}
