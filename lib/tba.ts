@@ -14,10 +14,10 @@ function getAuthKey() {
   return key;
 }
 
-async function tbaFetch<T>(path: string): Promise<T> {
+async function tbaFetch<T>(path: string, revalidate = 60): Promise<T> {
   const response = await fetch(`${TBA_BASE_URL}${path}`, {
     headers: { "X-TBA-Auth-Key": getAuthKey() },
-    next: { revalidate: 60 },
+    next: { revalidate },
   });
   if (!response.ok) throw new Error(`TBA request failed (${response.status} ${response.statusText}).`);
   return response.json() as Promise<T>;
@@ -40,5 +40,13 @@ export function getEventMatches(eventKey: string) {
 }
 
 export function getEventOprs(eventKey: string) {
-  return tbaFetch<TbaOprs | null>(`/event/${encodeURIComponent(eventKey)}/oprs`);
+  return tbaFetch<TbaOprs | null>(`/event/${encodeURIComponent(eventKey)}/oprs`, 300);
+}
+
+export function getEventsForYear(year: number) {
+  return tbaFetch<TbaEvent[]>(`/events/${year}/simple`, 3600);
+}
+
+export function getTeamsForYearPage(page: number, year: number) {
+  return tbaFetch<TbaTeam[]>(`/teams/${page}/${year}`, 3600);
 }
