@@ -5,9 +5,11 @@ export const maxDuration = 60;
 
 const MIN_YEAR = 1992;
 const MAX_CONCURRENCY = 12;
+const OFFSEASON_EVENT_TYPE = 99;
 
 type TeamAggregate = {
   values: Array<{ value: number; eventKey: string; eventName: string; date: string }>;
+  districtKeys: Set<string>;
 };
 
 function teamNumberFromKey(teamKey: string) {
@@ -54,8 +56,19 @@ export async function GET(
       return NextResponse.json({ error: `Year must be between ${MIN_YEAR} and ${currentYear}.` }, { status: 400 });
     }
 
-    const [events, teams] = await Promise.all([getEventsForYear(year), loadYearTeams(year)]);
+    const [allEvents, teams] = await Promise.all([getEventsForYear(year), loadYearTeams(year)]);
+    const events = allEvents.filter((event) => event.event_type !== OFFSEASON_EVENT_TYPE);
     const teamMeta = new Map(teams.map((team) => [team.team_number, team]));
+    const districtMap = new Map<string, { key: string; abbreviation: string; displayName: string }>();
+
+    for (const event of events) {
+      if (!event.district) continue;
+      districtMap.set(event.district.key, {
+        key: event.district.key,
+        abbreviation: event.district.abbreviation,
+        displayName: event.district.display_name,
+      });
+    }
 
     const eventRows = await mapWithConcurrency(events, MAX_CONCURRENCY, async (event) => {
       const oprs = await getEventOprs(event.key).catch(() => null);
@@ -73,8 +86,9 @@ export async function GET(
       for (const [teamKey, value] of Object.entries(oprs.oprs)) {
         if (!Number.isFinite(value)) continue;
         const teamNumber = teamNumberFromKey(teamKey);
-        const aggregate = aggregates.get(teamNumber) ?? { values: [] };
+        const aggregate = aggregates.get(teamNumber) ?? { values: [], districtKeys: new Set<string>() };
         aggregate.values.push({ value, eventKey: event.key, eventName: event.name, date });
+        if (event.district?.key) aggregate.districtKeys.add(event.district.key);
         aggregates.set(teamNumber, aggregate);
       }
     }
@@ -99,18 +113,25 @@ export async function GET(
         latestEventName: latest.eventName,
         latestEventDate: latest.date,
         eventCount: ordered.length,
+        districtKeys: Array.from(aggregate.districtKeys).sort(),
       };
     });
 
     rows.sort((a, b) => b.peakOpr - a.peakOpr || a.teamNumber - b.teamNumber);
+
+    const districts = Array.from(districtMap.values()).sort((a, b) =>
+      a.displayName.localeCompare(b.displayName) || a.key.localeCompare(b.key),
+    );
 
     return NextResponse.json(
       {
         year,
         generatedAt: new Date().toISOString(),
         eventCount: events.length,
+        excludedOffseasonEventCount: allEvents.length - events.length,
         eventsWithOpr,
         teamCount: rows.length,
+        districts,
         teams: rows,
       },
       {
