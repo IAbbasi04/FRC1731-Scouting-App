@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getEventOprs, getEventsForYear, getTeamsForYearPage } from "@/lib/tba";
+import { computeFilteredOpr } from "@/lib/filtered-opr";
+import { getEventMatches, getEventOprs, getEventsForYear, getTeamsForYearPage } from "@/lib/tba";
 
 export const maxDuration = 60;
 
@@ -7,8 +8,11 @@ const MIN_YEAR = 1992;
 const MAX_CONCURRENCY = 12;
 const OFFSEASON_EVENT_TYPE = 99;
 
+type OprValue = { value: number; eventKey: string; eventName: string; date: string };
+
 type TeamAggregate = {
-  values: Array<{ value: number; eventKey: string; eventName: string; date: string }>;
+  values: OprValue[];
+  filteredValues: OprValue[];
   districtKeys: Set<string>;
 };
 
@@ -71,51 +75,92 @@ export async function GET(
     }
 
     const eventRows = await mapWithConcurrency(events, MAX_CONCURRENCY, async (event) => {
-      const oprs = await getEventOprs(event.key).catch(() => null);
-      return { event, oprs };
+      const [oprs, matches] = await Promise.all([
+        getEventOprs(event.key).catch(() => null),
+        getEventMatches(event.key).catch(() => null),
+      ]);
+      const filtered = matches ? computeFilteredOpr(matches) : null;
+      return { event, oprs, filtered };
     });
 
     const aggregates = new Map<number, TeamAggregate>();
     let eventsWithOpr = 0;
+    let eventsWithFilteredOpr = 0;
+    let qualificationMatches = 0;
+    let removedOutlierMatches = 0;
 
-    for (const { event, oprs } of eventRows) {
-      if (!oprs?.oprs || Object.keys(oprs.oprs).length === 0) continue;
-      eventsWithOpr += 1;
+    for (const { event, oprs, filtered } of eventRows) {
       const date = event.end_date || event.start_date || `${year}-01-01`;
+      const hasRawOpr = Boolean(oprs?.oprs && Object.keys(oprs.oprs).length > 0);
+      const hasFilteredOpr = Boolean(filtered && Object.keys(filtered.oprs).length > 0);
 
-      for (const [teamKey, value] of Object.entries(oprs.oprs)) {
-        if (!Number.isFinite(value)) continue;
-        const teamNumber = teamNumberFromKey(teamKey);
-        const aggregate = aggregates.get(teamNumber) ?? { values: [], districtKeys: new Set<string>() };
-        aggregate.values.push({ value, eventKey: event.key, eventName: event.name, date });
-        if (event.district?.key) aggregate.districtKeys.add(event.district.key);
-        aggregates.set(teamNumber, aggregate);
+      if (hasRawOpr) eventsWithOpr += 1;
+      if (hasFilteredOpr) eventsWithFilteredOpr += 1;
+      if (filtered) {
+        qualificationMatches += filtered.qualificationMatchCount;
+        removedOutlierMatches += filtered.removedMatchCount;
+      }
+
+      if (oprs?.oprs) {
+        for (const [teamKey, value] of Object.entries(oprs.oprs)) {
+          if (!Number.isFinite(value)) continue;
+          const teamNumber = teamNumberFromKey(teamKey);
+          const aggregate = aggregates.get(teamNumber) ?? { values: [], filteredValues: [], districtKeys: new Set<string>() };
+          aggregate.values.push({ value, eventKey: event.key, eventName: event.name, date });
+          if (event.district?.key) aggregate.districtKeys.add(event.district.key);
+          aggregates.set(teamNumber, aggregate);
+        }
+      }
+
+      if (filtered?.oprs) {
+        for (const [teamKey, value] of Object.entries(filtered.oprs)) {
+          if (!Number.isFinite(value)) continue;
+          const teamNumber = teamNumberFromKey(teamKey);
+          const aggregate = aggregates.get(teamNumber) ?? { values: [], filteredValues: [], districtKeys: new Set<string>() };
+          aggregate.filteredValues.push({ value, eventKey: event.key, eventName: event.name, date });
+          if (event.district?.key) aggregate.districtKeys.add(event.district.key);
+          aggregates.set(teamNumber, aggregate);
+        }
       }
     }
 
-    const rows = Array.from(aggregates.entries()).map(([teamNumber, aggregate]) => {
-      const ordered = [...aggregate.values].sort((a, b) => a.date.localeCompare(b.date) || a.eventKey.localeCompare(b.eventKey));
-      const latest = ordered[ordered.length - 1];
-      const peak = Math.max(...ordered.map((item) => item.value));
-      const average = ordered.reduce((sum, item) => sum + item.value, 0) / ordered.length;
-      const meta = teamMeta.get(teamNumber);
+    const rows = Array.from(aggregates.entries())
+      .filter(([, aggregate]) => aggregate.values.length > 0)
+      .map(([teamNumber, aggregate]) => {
+        const ordered = [...aggregate.values].sort((a, b) => a.date.localeCompare(b.date) || a.eventKey.localeCompare(b.eventKey));
+        const filteredOrdered = [...aggregate.filteredValues].sort((a, b) => a.date.localeCompare(b.date) || a.eventKey.localeCompare(b.eventKey));
+        const latest = ordered[ordered.length - 1];
+        const peak = Math.max(...ordered.map((item) => item.value));
+        const average = ordered.reduce((sum, item) => sum + item.value, 0) / ordered.length;
+        const filteredAverage = filteredOrdered.length
+          ? filteredOrdered.reduce((sum, item) => sum + item.value, 0) / filteredOrdered.length
+          : null;
+        const meta = teamMeta.get(teamNumber);
 
-      return {
-        teamNumber,
-        nickname: meta?.nickname ?? meta?.name ?? `Team ${teamNumber}`,
-        city: meta?.city ?? null,
-        stateProv: meta?.state_prov ?? null,
-        country: meta?.country ?? null,
-        peakOpr: peak,
-        averageOpr: average,
-        latestOpr: latest.value,
-        latestEventKey: latest.eventKey,
-        latestEventName: latest.eventName,
-        latestEventDate: latest.date,
-        eventCount: ordered.length,
-        districtKeys: Array.from(aggregate.districtKeys).sort(),
-      };
-    });
+        return {
+          teamNumber,
+          nickname: meta?.nickname ?? meta?.name ?? `Team ${teamNumber}`,
+          city: meta?.city ?? null,
+          stateProv: meta?.state_prov ?? null,
+          country: meta?.country ?? null,
+          peakOpr: peak,
+          averageOpr: average,
+          latestOpr: latest.value,
+          filteredOpr: filteredAverage,
+          filteredEventCount: filteredOrdered.length,
+          latestEventKey: latest.eventKey,
+          latestEventName: latest.eventName,
+          latestEventDate: latest.date,
+          eventCount: ordered.length,
+          districtKeys: Array.from(aggregate.districtKeys).sort(),
+          oprValues: ordered.map((item) => ({
+            value: item.value,
+            eventKey: item.eventKey,
+            eventName: item.eventName,
+            date: item.date,
+          })),
+        };
+      });
 
     rows.sort((a, b) => b.peakOpr - a.peakOpr || a.teamNumber - b.teamNumber);
 
@@ -130,6 +175,9 @@ export async function GET(
         eventCount: events.length,
         excludedOffseasonEventCount: allEvents.length - events.length,
         eventsWithOpr,
+        eventsWithFilteredOpr,
+        qualificationMatches,
+        removedOutlierMatches,
         teamCount: rows.length,
         districts,
         teams: rows,
