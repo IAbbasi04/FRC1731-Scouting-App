@@ -4,6 +4,8 @@ import { getEventDashboard } from "@/lib/event-dashboard";
 
 const EVENT_KEY = "2026vaale1";
 
+export const dynamic = "force-dynamic";
+
 export default async function TeamsPage() {
   const dashboard = await getEventDashboard(EVENT_KEY);
   const teams = [...dashboard.teams].sort((a, b) => a.teamNumber - b.teamNumber);
