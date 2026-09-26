@@ -1,15 +1,15 @@
+import { IcebreakerPickListAccess } from "@/components/icebreaker-picklist-access";
 import { PageHeader } from "@/components/page-header";
-import { PickListBuilder } from "@/components/picklist-builder";
 
 export default function PickListPage() {
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader
-        eyebrow="Alliance selection"
-        title="Pick List"
-        description="Start from event OPR, then reorder teams with strategy judgment and tag the roles that matter to your alliance plan."
+        eyebrow="2026vaale1 · Restricted"
+        title="Icebreaker Pick List"
+        description="Alliance-selection workspace for Ibrahim and Hisham. Initial ordering uses OPR; manual strategy judgment, tags, and DNP decisions remain separate."
       />
-      <PickListBuilder />
+      <IcebreakerPickListAccess />
     </main>
   );
 }

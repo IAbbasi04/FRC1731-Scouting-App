@@ -1,24 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, ClipboardList, GitCompareArrows, Home, ListChecks, LogOut, Trophy, Users, Wrench } from "lucide-react";
+import { BarChart3, ClipboardList, ListChecks, LogOut, Wrench } from "lucide-react";
 import { MetricPreferencesButton } from "@/components/metric-preferences-button";
 import { PwaRegistration } from "@/components/pwa-registration";
 import { useScouterSession } from "@/components/scouter-session";
 
-const nav = [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/events", label: "Events", icon: Trophy },
-  { href: "/teams", label: "Teams", icon: Users },
-  { href: "/scouting", label: "Scouting", icon: ClipboardList },
+const ICEBREAKER_PICKLIST_USERS = new Set(["ibrahim", "hisham"]);
+
+const baseNav = [
+  { href: "/scouting", label: "Match", icon: ClipboardList },
   { href: "/pit-scouting", label: "Pit", icon: Wrench },
-  { href: "/analysis", label: "Analysis", icon: BarChart3 },
-  { href: "/compare", label: "Compare", icon: GitCompareArrows },
-  { href: "/picklist", label: "Pick List", icon: ListChecks },
+  { href: "/analysis", label: "Data", icon: BarChart3 },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { session, signOut } = useScouterSession();
+  const canUsePickList = ICEBREAKER_PICKLIST_USERS.has(session.name.trim().toLowerCase());
+  const nav = canUsePickList ? [...baseNav, { href: "/picklist", label: "Pick List", icon: ListChecks }] : baseNav;
 
   return (
     <div className="min-h-screen">
@@ -27,7 +26,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-3 sm:px-6 lg:px-8">
           <Link href="/" className="flex min-w-0 items-center gap-3 font-semibold text-white">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-yellow-300/40 bg-[#0b5fff] text-[#ffd84d] shadow-lg shadow-blue-950/30"><BarChart3 size={20} /></span>
-            <span className="hidden sm:inline"><span className="text-[#ffd84d]">1731</span> Scouting</span>
+            <span className="hidden sm:inline"><span className="text-[#ffd84d]">1731</span> Icebreaker</span>
           </Link>
           <div className="flex min-w-0 items-center gap-2">
             <nav className="hidden gap-1 md:flex">
