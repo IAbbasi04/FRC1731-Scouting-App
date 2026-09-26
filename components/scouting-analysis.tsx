@@ -148,7 +148,7 @@ function assessQuality(entries: CloudEntry[], fields: GameField[]): QualityAsses
 }
 
 export function ScoutingAnalysis() {
-  const [eventKey, setEventKey] = useState("2026vaale");
+  const [eventKey] = useState("2026vaale1");
   const [loadedEvent, setLoadedEvent] = useState("");
   const [entries, setEntries] = useState<CloudEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -198,7 +198,7 @@ export function ScoutingAnalysis() {
       <form onSubmit={load} className="flex flex-col gap-3 rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/80 p-4 sm:flex-row sm:items-end">
         <label className="flex-1 space-y-2 text-sm">
           <span className="font-medium text-slate-300">Event key</span>
-          <input value={eventKey} onChange={(e) => setEventKey(e.target.value)} className="w-full rounded-xl border border-blue-300/20 bg-[#07111f] px-3 py-2.5 text-white outline-none focus:border-[#0b5fff]" />
+          <div className="w-full rounded-xl border border-blue-300/20 bg-[#07111f] px-3 py-2.5 font-mono text-[#ffd84d]">2026vaale1</div>
         </label>
         <button type="submit" disabled={loading || !eventKey.trim()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#ffd84d] px-5 py-2.5 font-semibold text-[#07111f] disabled:opacity-50">
           <Search size={17} /> {loading ? "Loading…" : "Analyze event"}
