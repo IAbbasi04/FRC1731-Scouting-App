@@ -309,6 +309,11 @@ export function ScoutingAnalysis() {
     return [...derived, ...gameFields, ...standard];
   }, [config.fields]);
 
+  const graphMetrics = useMemo(
+    () => metrics.filter((metric) => ["autoFuel", "teleopFuel", "totalFuel"].includes(metric.key)),
+    [metrics],
+  );
+
   const loadData = useCallback(async () => {
     setError(null);
     setLoading(true);
@@ -419,12 +424,12 @@ export function ScoutingAnalysis() {
           <div className="flex items-center gap-2">
             <BarChart3 size={19} className="text-[#ffd84d]" />
             <div>
-              <h2 className="font-semibold text-white">Metric graphs</h2>
-              <p className="text-xs text-slate-500">One team comparison graph for every table metric. For categorical metrics, the bar shows how consistently scouts agreed on the displayed most-common category.</p>
+              <h2 className="font-semibold text-white">Fuel graphs</h2>
+              <p className="text-xs text-slate-500">Auto, teleop, and total fuel averages ranked from highest to lowest for quick comparison.</p>
             </div>
           </div>
-          <div className="grid gap-4 xl:grid-cols-2">
-            {metrics.map((metric) => <MetricChart key={metric.key} metric={metric} teams={teams} />)}
+          <div className="grid gap-4 xl:grid-cols-3">
+            {graphMetrics.map((metric) => <MetricChart key={metric.key} metric={metric} teams={teams} />)}
           </div>
         </section>
       ) : null}
@@ -433,7 +438,16 @@ export function ScoutingAnalysis() {
 }
 
 function MetricChart({ metric, teams }: { metric: MetricDefinition; teams: TeamSummary[] }) {
-  const rows = teams.map((team) => ({ teamNumber: team.teamNumber, result: metric.result(team.entries) }));
+  const rows = teams
+    .map((team) => ({ teamNumber: team.teamNumber, result: metric.result(team.entries) }))
+    .sort((a, b) => {
+      const aValue = a.result.value;
+      const bValue = b.result.value;
+      if (aValue === null && bValue === null) return a.teamNumber - b.teamNumber;
+      if (aValue === null) return 1;
+      if (bValue === null) return -1;
+      return bValue - aValue || a.teamNumber - b.teamNumber;
+    });
   const finiteValues = rows.map((row) => row.result.value).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
   const max = metric.kind === "percent" || metric.kind === "category"
     ? 100
