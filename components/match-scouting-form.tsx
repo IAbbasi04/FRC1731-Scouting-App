@@ -3,12 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Cloud, CloudOff, Download, Save, Trash2 } from "lucide-react";
 import { useScouterSession } from "@/components/scouter-session";
-import {
-  getScoutingSeason,
-  inferSeasonFromEventKey,
-  scoutingSeasons,
-  type GameField,
-} from "@/config/scouting/seasons";
+import { getScoutingSeason, type GameField } from "@/config/scouting/seasons";
 import type {
   AllianceColor,
   DefenseLevel,
@@ -55,7 +50,7 @@ export function MatchScoutingForm() {
   const [entries, setEntries] = useState<StoredScoutingEntry[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(true);
-  const [season, setSeason] = useState(2026);
+  const [season] = useState(2026);
   const config = getScoutingSeason(season);
   const [eventKey] = useState(ICEBREAKER_EVENT_KEY);
   const [matchNumber, setMatchNumber] = useState<number | "">(1);
@@ -216,7 +211,7 @@ export function MatchScoutingForm() {
               <p className="mt-1 hidden text-sm text-slate-400 sm:block">{config.description}</p>
             </div>
             <select value={season} disabled className={`${inputClass} max-w-40 shrink-0 opacity-70 sm:max-w-xs`} aria-label="Scouting season">
-              {scoutingSeasons.map((item) => <option key={item.year} value={item.year}>{item.year} · {item.gameName}</option>)}
+              <option value={2026}>2026 · {config.gameName}</option>
             </select>
           </div>
         </section>
