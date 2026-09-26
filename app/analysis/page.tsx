@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/page-header";
 import { ScoutingAnalysis } from "@/components/scouting-analysis";
-import { TeamsLeaderboard } from "@/components/teams-leaderboard";
+import { IcebreakerOpr } from "@/components/icebreaker-opr";
 
 export default function AnalysisPage() {
   return (
@@ -22,7 +22,7 @@ export default function AnalysisPage() {
           <h2 className="text-2xl font-bold text-white">OPR reference</h2>
           <p className="mt-1 text-sm text-slate-400">External OPR context for comparison. Search an Icebreaker team or plot several teams to compare their 2026 OPR distributions.</p>
         </div>
-        <TeamsLeaderboard />
+        <IcebreakerOpr />
       </section>
     </main>
   );
