@@ -1,15 +1,23 @@
+import { IcebreakerTeamsDirectory } from "@/components/icebreaker-teams-directory";
 import { PageHeader } from "@/components/page-header";
-import { TeamsLeaderboard } from "@/components/teams-leaderboard";
+import { getEventDashboard } from "@/lib/event-dashboard";
 
-export default function TeamsPage() {
+const EVENT_KEY = "2026vaale1";
+
+export const dynamic = "force-dynamic";
+
+export default async function TeamsPage() {
+  const dashboard = await getEventDashboard(EVENT_KEY);
+  const teams = [...dashboard.teams].sort((a, b) => a.teamNumber - b.teamNumber);
+
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader
-        eyebrow="Global team intelligence"
+        eyebrow="2026vaale1 · Icebreaker"
         title="Teams"
-        description="Rank FRC teams worldwide for any season by peak, average, or latest event OPR, then jump directly into a team profile."
+        description="Open an event scouting card for any Icebreaker team. Robot photos come from pit scouting; performance, notes, and report history come from synced 1731 match scouting."
       />
-      <TeamsLeaderboard />
+      <IcebreakerTeamsDirectory teams={teams} />
     </main>
   );
 }

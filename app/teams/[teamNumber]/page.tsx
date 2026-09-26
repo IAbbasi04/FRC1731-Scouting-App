@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { TeamTradingCard } from "@/components/team-trading-card";
 import { getEventDashboard } from "@/lib/event-dashboard";
-import { TeamEventMetrics, TeamEventSnapshot } from "@/components/team-event-metrics";
-import { TeamPitSummary } from "@/components/team-pit-summary";
-import { TeamScoutingSummary } from "@/components/team-scouting-summary";
+
+const EVENT_KEY = "2026vaale1";
 
 export default async function TeamEventProfilePage({
   params,
@@ -15,10 +15,11 @@ export default async function TeamEventProfilePage({
   const { teamNumber: rawTeamNumber } = await params;
   const { event } = await searchParams;
   const teamNumber = Number(rawTeamNumber);
+  const eventKey = event?.trim().toLowerCase() || EVENT_KEY;
 
-  if (!Number.isFinite(teamNumber) || !event) notFound();
+  if (!Number.isFinite(teamNumber)) notFound();
 
-  const dashboard = await getEventDashboard(event);
+  const dashboard = await getEventDashboard(eventKey);
   const team = dashboard.teams.find((row) => row.teamNumber === teamNumber);
   if (!team) notFound();
 
@@ -27,21 +28,19 @@ export default async function TeamEventProfilePage({
   );
 
   return (
-    <main className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
-      <div>
-        <Link href="/events" className="text-sm text-blue-300 hover:text-[#ffd84d]">← Events</Link>
-        <p className="mt-6 text-sm font-semibold uppercase tracking-[0.2em] text-[#ffd84d]">{dashboard.event.name}</p>
-        <h1 className="mt-2 text-4xl font-semibold text-white">Team {team.teamNumber} · {team.nickname}</h1>
-        <p className="mt-2 text-slate-400">{[team.city, team.stateProv].filter(Boolean).join(", ")}</p>
+    <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link href="/teams" className="text-sm font-semibold text-blue-300 hover:text-[#ffd84d]">← All Icebreaker teams</Link>
+        <div className="font-mono text-xs text-slate-600">{eventKey}</div>
       </div>
 
-      <TeamEventMetrics team={team} />
-      <TeamEventSnapshot team={team} matchCount={teamMatches.length} />
-      <TeamPitSummary eventKey={event} teamNumber={teamNumber} />
-      <TeamScoutingSummary eventKey={event} teamNumber={teamNumber} />
+      <TeamTradingCard eventKey={eventKey} team={team} matchCount={teamMatches.length} />
 
       <section className="overflow-hidden rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/70">
-        <div className="border-b border-blue-400/10 bg-[#11243d] px-5 py-3"><h2 className="font-semibold text-[#ffd84d]">Matches</h2></div>
+        <div className="border-b border-blue-400/10 bg-[#11243d] px-5 py-3">
+          <h2 className="font-semibold text-[#ffd84d]">Official match schedule</h2>
+          <p className="mt-1 text-xs text-slate-500">TBA schedule context, separate from the individual 1731 scouting reports above.</p>
+        </div>
         <div className="divide-y divide-blue-400/10">
           {teamMatches.map((match) => {
             const isRed = match.alliances.red.team_keys.includes(team.teamKey);
@@ -50,11 +49,18 @@ export default async function TeamEventProfilePage({
             return (
               <div key={match.key} className="grid gap-2 px-5 py-4 text-sm hover:bg-[#0b5fff]/5 sm:grid-cols-[90px_1fr_auto] sm:items-center">
                 <div className="font-medium text-white">{match.comp_level === "qm" ? `Q${match.match_number}` : `${match.comp_level.toUpperCase()} ${match.set_number}-${match.match_number}`}</div>
-                <div className="text-slate-400">{isRed ? "Red" : "Blue"} · with {alliance.team_keys.filter((key) => key !== team.teamKey).map((key) => key.replace(/^frc/, "")).join(", ")} · vs {opponent.team_keys.map((key) => key.replace(/^frc/, "")).join(", ")}</div>
+                <div className="text-slate-400">
+                  <span className={isRed ? "text-red-300" : "text-blue-300"}>{isRed ? "Red" : "Blue"}</span>
+                  {" · with "}
+                  {alliance.team_keys.filter((key) => key !== team.teamKey).map((key) => key.replace(/^frc/, "")).join(", ")}
+                  {" · vs "}
+                  {opponent.team_keys.map((key) => key.replace(/^frc/, "")).join(", ")}
+                </div>
                 <div className="font-mono text-slate-200">{alliance.score >= 0 ? `${alliance.score}–${opponent.score}` : "Upcoming"}</div>
               </div>
             );
           })}
+          {!teamMatches.length ? <div className="px-5 py-8 text-center text-sm text-slate-500">No official matches published for this team yet.</div> : null}
         </div>
       </section>
     </main>
