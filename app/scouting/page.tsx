@@ -2,7 +2,6 @@ import Link from "next/link";
 import { Wrench } from "lucide-react";
 import { MatchScoutingForm } from "@/components/match-scouting-form";
 import { PageHeader } from "@/components/page-header";
-import { ScoutingAssignmentPanel } from "@/components/scouting-assignment-panel";
 import { ScoutingSyncPanel } from "@/components/scouting-sync-panel";
 
 export default function ScoutingPage() {
@@ -14,7 +13,6 @@ export default function ScoutingPage() {
           <Wrench size={16} /> Pit scouting
         </Link>
       </div>
-      <ScoutingAssignmentPanel />
       <MatchScoutingForm />
       <ScoutingSyncPanel />
     </main>
