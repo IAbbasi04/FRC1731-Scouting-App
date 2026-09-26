@@ -72,7 +72,7 @@ function tagClass(tag: string) {
 }
 
 export function PickListBuilder() {
-  const [eventCode] = useState(ICEBREAKER_EVENT_KEY);
+  const [eventCode, setEventCode] = useState(ICEBREAKER_EVENT_KEY);
   const [eventInfo, setEventInfo] = useState<PickListResponse["event"] | null>(null);
   const [teams, setTeams] = useState<PickListTeam[]>([]);
   const [dnpTeams, setDnpTeams] = useState<PickListTeam[]>([]);
