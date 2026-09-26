@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 const OUR_TEAM_NUMBER = 1731;
+const ICEBREAKER_EVENT_KEY = "2026vaale1";
 const DEFAULT_TAGS = ["Scorer", "Defender", "Passer", "Auto", "Climber", "Flexible", "Reliability risk"];
 
 type PickListTeam = {
@@ -71,7 +72,7 @@ function tagClass(tag: string) {
 }
 
 export function PickListBuilder() {
-  const [eventCode, setEventCode] = useState("");
+  const [eventCode] = useState(ICEBREAKER_EVENT_KEY);
   const [eventInfo, setEventInfo] = useState<PickListResponse["event"] | null>(null);
   const [teams, setTeams] = useState<PickListTeam[]>([]);
   const [dnpTeams, setDnpTeams] = useState<PickListTeam[]>([]);
@@ -268,7 +269,7 @@ export function PickListBuilder() {
         <form onSubmit={loadEvent} className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <label className="flex-1 space-y-2 text-sm">
             <span className="font-medium text-slate-300">Event code</span>
-            <input value={eventCode} onChange={(event) => setEventCode(event.target.value)} placeholder="2026vahay" autoCapitalize="none" className={inputClass} />
+            <div className={`${inputClass} flex items-center font-mono text-[#ffd84d]`}>{ICEBREAKER_EVENT_KEY}</div>
           </label>
           <button type="submit" disabled={loading || !eventCode.trim()} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#0b5fff] px-5 py-3 font-semibold text-white hover:bg-blue-500 disabled:opacity-50">
             <RefreshCw size={17} className={loading ? "animate-spin" : ""} />
