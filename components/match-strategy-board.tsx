@@ -319,45 +319,73 @@ export function MatchStrategyBoard() {
   return (
     <div className="space-y-4">
       <section className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/85 p-4">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <label className="space-y-2 text-sm">
-              <span className="font-medium text-slate-300">Qualification match</span>
-              <select
-                value={selectedMatch?.key ?? ""}
-                onChange={(event) => setSelectedMatchKey(event.target.value)}
-                disabled={loading || !matches.length}
-                className="min-h-11 min-w-52 rounded-xl border border-blue-300/20 bg-[#07111f] px-3 py-2.5 text-white outline-none focus:border-[#0b5fff] disabled:opacity-50"
-              >
-                {!matches.length ? <option value="">No matches available</option> : null}
-                {matches.map((match) => (
-                  <option key={match.key} value={match.key}>Qualification {match.match_number}</option>
-                ))}
-              </select>
-            </label>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+            <div className="space-y-3">
+              <div className="inline-flex rounded-xl border border-blue-300/15 bg-[#07111f] p-1">
+                <button
+                  type="button"
+                  onClick={() => switchBoardMode("match")}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold ${boardMode === "match" ? "bg-[#0b5fff] text-white" : "text-slate-400 hover:text-white"}`}
+                >
+                  Actual match
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchBoardMode("manual")}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold ${boardMode === "manual" ? "bg-[#ffd84d] text-[#07111f]" : "text-slate-400 hover:text-white"}`}
+                >
+                  Manual override
+                </button>
+              </div>
+
+              {boardMode === "match" ? (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                  <label className="space-y-2 text-sm">
+                    <span className="font-medium text-slate-300">Qualification match</span>
+                    <select
+                      value={selectedMatch?.key ?? ""}
+                      onChange={(event) => setSelectedMatchKey(event.target.value)}
+                      disabled={loading || !matches.length}
+                      className="min-h-11 min-w-52 rounded-xl border border-blue-300/20 bg-[#07111f] px-3 py-2.5 text-white outline-none focus:border-[#0b5fff] disabled:opacity-50"
+                    >
+                      {!matches.length ? <option value="">No matches available</option> : null}
+                      {matches.map((match) => (
+                        <option key={match.key} value={match.key}>Qualification {match.match_number}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void loadBoardData()}
+                    disabled={loading}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-blue-300/20 px-4 py-2 text-sm font-semibold text-slate-200 hover:border-[#ffd84d]/40 disabled:opacity-50"
+                  >
+                    <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+                    {loading ? "Loading…" : "Refresh"}
+                  </button>
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <ManualAllianceInputs alliance="red" values={manualRed} onChange={setManualTeam} />
+                  <ManualAllianceInputs alliance="blue" values={manualBlue} onChange={setManualTeam} />
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
-              onClick={() => void loadBoardData()}
-              disabled={loading}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-blue-300/20 px-4 py-2 text-sm font-semibold text-slate-200 hover:border-[#ffd84d]/40 disabled:opacity-50"
+              onClick={() => void downloadBoard()}
+              disabled={(boardMode === "match" && !selectedMatch) || downloading}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#ffd84d] px-5 py-2.5 font-semibold text-[#07111f] hover:bg-yellow-300 disabled:opacity-50"
             >
-              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-              {loading ? "Loading…" : "Refresh"}
+              <Download size={17} />
+              {downloading ? "Generating image…" : "Download image"}
             </button>
           </div>
-
-          <button
-            type="button"
-            onClick={() => void downloadBoard()}
-            disabled={!selectedMatch || downloading}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#ffd84d] px-5 py-2.5 font-semibold text-[#07111f] hover:bg-yellow-300 disabled:opacity-50"
-          >
-            <Download size={17} />
-            {downloading ? "Generating image…" : "Download image"}
-          </button>
         </div>
         <p className="mt-3 text-xs leading-5 text-slate-500">
-          The field is a strategy schematic, not a scale drawing. OPR/rank are external event context; all other performance stats below come from Team 1731 scouting.
+          Actual match mode follows TBA. Manual override lets you enter any three red and three blue teams, then switch back without losing the selected qualification match. OPR/rank are event context; the remaining stats come from Team 1731 scouting.
         </p>
         {message ? <div className="mt-3 rounded-xl border border-yellow-300/20 bg-yellow-300/5 px-3 py-2 text-sm text-yellow-100">{message}</div> : null}
       </section>
@@ -371,7 +399,7 @@ export function MatchStrategyBoard() {
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffd84d]">Team 1731 · Chesapeake Robotics Icebreaker</div>
               <h2 className="mt-1 text-3xl font-bold text-white">
-                {selectedMatch ? `Qualification ${selectedMatch.match_number}` : "Match strategy board"}
+                {boardMode === "manual" ? "Manual alliance board" : selectedMatch ? `Qualification ${selectedMatch.match_number}` : "Match strategy board"}
               </h2>
             </div>
             <div className="text-right">
@@ -382,25 +410,56 @@ export function MatchStrategyBoard() {
 
           <div className="grid grid-cols-[300px_minmax(700px,1fr)_300px] gap-4">
             <AllianceColumn
-              alliance="blue"
-              teamNumbers={blueTeams}
+              alliance="red"
+              teamNumbers={redTeams}
               statsByTeam={statsByTeam}
             />
 
             <section className="overflow-hidden rounded-3xl border border-blue-300/15 bg-[#0d1b2e] p-3">
-              <FieldSchematic
+              <FieldImage
                 blueTeams={blueTeams}
                 redTeams={redTeams}
               />
             </section>
 
             <AllianceColumn
-              alliance="red"
-              teamNumbers={redTeams}
+              alliance="blue"
+              teamNumbers={blueTeams}
               statsByTeam={statsByTeam}
             />
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ManualAllianceInputs({
+  alliance,
+  values,
+  onChange,
+}: {
+  alliance: "red" | "blue";
+  values: string[];
+  onChange: (alliance: "red" | "blue", index: number, value: string) => void;
+}) {
+  const red = alliance === "red";
+  return (
+    <div className={`rounded-xl border p-3 ${red ? "border-red-400/25 bg-red-950/15" : "border-blue-400/25 bg-blue-950/15"}`}>
+      <div className={`mb-2 text-xs font-bold uppercase tracking-[0.14em] ${red ? "text-red-200" : "text-blue-200"}`}>{alliance} alliance teams</div>
+      <div className="grid grid-cols-3 gap-2">
+        {values.map((value, index) => (
+          <input
+            key={index}
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={value}
+            onChange={(event) => onChange(alliance, index, event.target.value)}
+            placeholder={`Team ${index + 1}`}
+            aria-label={`${alliance} alliance team ${index + 1}`}
+            className="min-w-0 rounded-lg border border-blue-300/15 bg-[#07111f] px-2 py-2.5 text-center font-mono text-sm font-semibold text-white outline-none focus:border-[#ffd84d]/50"
+          />
+        ))}
       </div>
     </div>
   );
