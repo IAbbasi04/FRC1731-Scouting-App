@@ -20,6 +20,7 @@ import type {
 const STORAGE_KEY = "1731.match-scouting.entries.v1";
 const QUEUE_UPDATED_EVENT = "1731:scouting-queue-updated";
 const QUEUE_SYNCED_EVENT = "1731:scouting-queue-synced";
+const ICEBREAKER_EVENT_KEY = "2026vaale1";
 
 function loadEntries(): StoredScoutingEntry[] {
   try {
@@ -56,7 +57,7 @@ export function MatchScoutingForm() {
   const [isOnline, setIsOnline] = useState(true);
   const [season, setSeason] = useState(2026);
   const config = getScoutingSeason(season);
-  const [eventKey, setEventKey] = useState("");
+  const [eventKey] = useState(ICEBREAKER_EVENT_KEY);
   const [matchNumber, setMatchNumber] = useState<number | "">(1);
   const [teamNumber, setTeamNumber] = useState<number | "">(1731);
   const [alliance, setAlliance] = useState<AllianceColor>("red");
@@ -114,12 +115,6 @@ export function MatchScoutingForm() {
       setMessage("This entry could not be saved on the device. Do not leave this page until storage is available.");
       return false;
     }
-  }
-
-  function handleEventKey(value: string) {
-    setEventKey(value);
-    const inferred = inferSeasonFromEventKey(value);
-    if (inferred && scoutingSeasons.some((item) => item.year === inferred)) setSeason(inferred);
   }
 
   function setFieldValue(key: string, value: ScoutingValue) {
@@ -220,14 +215,14 @@ export function MatchScoutingForm() {
               <h2 className="mt-1 truncate text-lg font-semibold text-white sm:text-2xl">{config.year} · {config.gameName}</h2>
               <p className="mt-1 hidden text-sm text-slate-400 sm:block">{config.description}</p>
             </div>
-            <select value={season} onChange={(event) => setSeason(Number(event.target.value))} className={`${inputClass} max-w-40 shrink-0 sm:max-w-xs`} aria-label="Scouting season">
+            <select value={season} disabled className={`${inputClass} max-w-40 shrink-0 opacity-70 sm:max-w-xs`} aria-label="Scouting season">
               {scoutingSeasons.map((item) => <option key={item.year} value={item.year}>{item.year} · {item.gameName}</option>)}
             </select>
           </div>
         </section>
 
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Event key"><input value={eventKey} onChange={(event) => handleEventKey(event.target.value)} placeholder="2026vahay" autoCapitalize="none" className={inputClass} /></Field>
+          <Field label="Event"><div className={`${inputClass} flex items-center font-mono text-[#ffd84d]`}>{ICEBREAKER_EVENT_KEY}</div></Field>
           <Field label="Match"><input type="number" inputMode="numeric" min={1} value={matchNumber} onChange={(event) => setMatchNumber(event.target.value === "" ? "" : numberOrZero(event.target.value))} className={inputClass} /></Field>
           <Field label="Team"><input type="number" inputMode="numeric" min={1} value={teamNumber} onChange={(event) => setTeamNumber(event.target.value === "" ? "" : numberOrZero(event.target.value))} className={inputClass} /></Field>
           <Field label="Alliance"><select value={alliance} onChange={(event) => setAlliance(event.target.value as AllianceColor)} className={inputClass}><option value="red">Red</option><option value="blue">Blue</option></select></Field>
