@@ -13,7 +13,7 @@ export default function AnalysisPage() {
       <section className="space-y-4">
         <div>
           <h2 className="text-2xl font-bold text-white">1731 scouting data</h2>
-          <p className="mt-1 text-sm text-slate-400">Per-team observations, sample size, confidence, reliability, defense, driver ratings, and configured game metrics from Icebreaker reports.</p>
+          <p className="mt-1 text-sm text-slate-400">Per-game averages for every scouted team and metric, with a wide comparison table and hideable team graphs.</p>
         </div>
         <ScoutingAnalysis />
       </section>
