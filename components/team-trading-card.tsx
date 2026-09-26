@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ConvexHttpClient } from "convex/browser";
 import { makeFunctionReference } from "convex/server";
-import { Camera, ClipboardList, Clock3, Gauge, NotebookPen, Wrench } from "lucide-react";
+import { BarChart3, Camera, ClipboardList, Wrench } from "lucide-react";
 import { getScoutingSeason, type GameField } from "@/config/scouting/seasons";
 import type { EventDashboardTeam } from "@/types/frc";
 
@@ -318,7 +318,7 @@ export function TeamTradingCard({
 
       <section className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/80 p-5">
         <div className="flex items-center gap-2">
-          <Gauge size={19} className="text-[#ffd84d]" />
+          <BarChart3 size={19} className="text-[#ffd84d]" />
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.15em] text-[#ffd84d]">1731 observations</div>
             <h2 className="mt-1 text-xl font-bold text-white">Scouting averages</h2>
@@ -364,7 +364,7 @@ export function TeamTradingCard({
               <Stat label="Claimed autos" value={String(latestPit.autoCount)} />
             </div>
             <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
-              <Clock3 size={14} /> Pit report by <span className="font-semibold text-slate-300">{latestPit.scoutName}</span> · {createdLabel(latestPit.createdAt)}
+              Pit report by <span className="font-semibold text-slate-300">{latestPit.scoutName}</span> · {createdLabel(latestPit.createdAt)}
             </div>
           </>
         ) : (
@@ -374,7 +374,7 @@ export function TeamTradingCard({
 
       <section className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/80 p-5">
         <div className="flex items-center gap-2">
-          <NotebookPen size={19} className="text-[#ffd84d]" />
+          <ClipboardList size={19} className="text-[#ffd84d]" />
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.15em] text-[#ffd84d]">Scout notes</div>
             <h2 className="mt-1 text-xl font-bold text-white">Notes & observations</h2>
