@@ -1,23 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, ClipboardList, ListChecks, LogOut, Wrench } from "lucide-react";
+import { BarChart3, ClipboardList, ListChecks, LogOut, Map, Wrench } from "lucide-react";
 import { MetricPreferencesButton } from "@/components/metric-preferences-button";
 import { PwaRegistration } from "@/components/pwa-registration";
 import { useScouterSession } from "@/components/scouter-session";
 
-const ICEBREAKER_PICKLIST_USERS = new Set(["ibrahim", "hisham"]);
+const ICEBREAKER_RESTRICTED_USERS = new Set(["ibrahim", "hisham"]);
 
 const baseNav = [
-  { href: "/scouting", label: "Match", icon: ClipboardList },
+  { href: "/scouting", label: "Match Scout", icon: ClipboardList },
   { href: "/pit-scouting", label: "Pit", icon: Wrench },
   { href: "/analysis", label: "Data", icon: BarChart3 },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { session, signOut } = useScouterSession();
-  const canUsePickList = ICEBREAKER_PICKLIST_USERS.has(session.name.trim().toLowerCase());
-  const nav = canUsePickList ? [...baseNav, { href: "/picklist", label: "Pick List", icon: ListChecks }] : baseNav;
+  const canUseRestrictedTools = ICEBREAKER_RESTRICTED_USERS.has(session.name.trim().toLowerCase());
+  const nav = canUseRestrictedTools
+    ? [...baseNav, { href: "/match", label: "Match", icon: Map }, { href: "/picklist", label: "Pick List", icon: ListChecks }]
+    : baseNav;
 
   return (
     <div className="min-h-screen">
