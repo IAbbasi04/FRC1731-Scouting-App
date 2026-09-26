@@ -262,7 +262,7 @@ export function PitScoutingForm() {
       <form onSubmit={submit} className="space-y-6 rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/85 p-5 sm:p-6">
         <section className="rounded-2xl border border-yellow-300/20 bg-yellow-300/5 p-4">
           <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
-            <Field label="Event key"><input value={eventKey} onChange={(event) => setEventKey(event.target.value)} placeholder="2026vaale" className={inputClass} /></Field>
+            <Field label="Event"><div className={`${inputClass} flex items-center font-mono text-[#ffd84d]`}>{ICEBREAKER_EVENT_KEY}</div></Field>
             <button type="button" onClick={loadTeams} disabled={loadingTeams || !eventKey.trim()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0b5fff] px-4 py-2.5 font-semibold text-white hover:bg-blue-500 disabled:opacity-50"><Users size={16} />{loadingTeams ? "Loading…" : "Load teams"}</button>
           </div>
           <p className="mt-3 text-xs text-slate-500">Scouting as <span className="font-medium text-slate-300">{session.name}</span>. Use Switch user in the header to change scouters.</p>
