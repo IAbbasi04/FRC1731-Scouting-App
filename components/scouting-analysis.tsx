@@ -104,7 +104,7 @@ function categoryMetric(
   };
 }
 
-function towerPoints(value: unknown) {
+function towerPoints(value: unknown): number | null {
   if (value === "level1") return 10;
   if (value === "level2") return 20;
   if (value === "level3") return 30;
