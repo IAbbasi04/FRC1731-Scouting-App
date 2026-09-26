@@ -144,6 +144,9 @@ export function MatchStrategyBoard() {
   const [eventData, setEventData] = useState<EventData | null>(null);
   const [entries, setEntries] = useState<CloudEntry[]>([]);
   const [selectedMatchKey, setSelectedMatchKey] = useState("");
+  const [boardMode, setBoardMode] = useState<"match" | "manual">("match");
+  const [manualRed, setManualRed] = useState(["", "", ""]);
+  const [manualBlue, setManualBlue] = useState(["", "", ""]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -153,9 +156,33 @@ export function MatchStrategyBoard() {
     [matches, selectedMatchKey],
   );
 
+  const matchBlueTeams = selectedMatch?.alliances.blue.team_keys.map(teamNumberFromKey) ?? [];
+  const matchRedTeams = selectedMatch?.alliances.red.team_keys.map(teamNumberFromKey) ?? [];
+  const manualBlueTeams = manualBlue.map(Number).filter((team) => Number.isInteger(team) && team > 0);
+  const manualRedTeams = manualRed.map(Number).filter((team) => Number.isInteger(team) && team > 0);
+  const blueTeams = boardMode === "manual" ? manualBlueTeams : matchBlueTeams;
+  const redTeams = boardMode === "manual" ? manualRedTeams : matchRedTeams;
+
   const statsByTeam = useMemo(() => {
     const map = new Map<number, TeamStats>();
-    for (const team of eventData?.teams ?? []) {
+    const eventTeams = new Map((eventData?.teams ?? []).map((team) => [team.teamNumber, team]));
+    const candidateNumbers = new Set<number>([
+      ...eventTeams.keys(),
+      ...entries.map((entry) => entry.teamNumber),
+      ...blueTeams,
+      ...redTeams,
+    ]);
+
+    for (const teamNumber of candidateNumbers) {
+      const team = eventTeams.get(teamNumber) ?? {
+        teamNumber,
+        teamKey: `frc${teamNumber}`,
+        nickname: `Team ${teamNumber}`,
+        city: null,
+        stateProv: null,
+        rank: null,
+        opr: null,
+      };
       const teamEntries = entries.filter((entry) => entry.teamNumber === team.teamNumber);
       const uniqueMatches = new Set(teamEntries.map((entry) => entry.matchNumber)).size;
       const issueCount = teamEntries.filter(
@@ -184,7 +211,7 @@ export function MatchStrategyBoard() {
       });
     }
     return map;
-  }, [entries, eventData]);
+  }, [entries, eventData, blueTeams.join(","), redTeams.join(",")]);
 
   async function loadBoardData() {
     setLoading(true);
@@ -247,8 +274,26 @@ export function MatchStrategyBoard() {
     void loadBoardData();
   }, []);
 
+  function switchBoardMode(nextMode: "match" | "manual") {
+    if (
+      nextMode === "manual"
+      && selectedMatch
+      && [...manualRed, ...manualBlue].every((value) => !value.trim())
+    ) {
+      setManualRed(selectedMatch.alliances.red.team_keys.map((key) => String(teamNumberFromKey(key))));
+      setManualBlue(selectedMatch.alliances.blue.team_keys.map((key) => String(teamNumberFromKey(key))));
+    }
+    setBoardMode(nextMode);
+  }
+
+  function setManualTeam(alliance: "red" | "blue", index: number, value: string) {
+    const normalized = value.replace(/\D/g, "").slice(0, 5);
+    const setter = alliance === "red" ? setManualRed : setManualBlue;
+    setter((current) => current.map((team, teamIndex) => teamIndex === index ? normalized : team));
+  }
+
   async function downloadBoard() {
-    if (!boardRef.current || !selectedMatch) return;
+    if (!boardRef.current || (boardMode === "match" && !selectedMatch)) return;
     setDownloading(true);
     setMessage(null);
     try {
@@ -259,7 +304,9 @@ export function MatchStrategyBoard() {
         backgroundColor: "#07111f",
       });
       const anchor = document.createElement("a");
-      anchor.download = `1731-icebreaker-Q${selectedMatch.match_number}-strategy.png`;
+      anchor.download = boardMode === "manual"
+        ? "1731-icebreaker-manual-strategy.png"
+        : `1731-icebreaker-Q${selectedMatch?.match_number ?? "unknown"}-strategy.png`;
       anchor.href = dataUrl;
       anchor.click();
     } catch {
@@ -268,9 +315,6 @@ export function MatchStrategyBoard() {
       setDownloading(false);
     }
   }
-
-  const blueTeams = selectedMatch?.alliances.blue.team_keys.map(teamNumberFromKey) ?? [];
-  const redTeams = selectedMatch?.alliances.red.team_keys.map(teamNumberFromKey) ?? [];
 
   return (
     <div className="space-y-4">
