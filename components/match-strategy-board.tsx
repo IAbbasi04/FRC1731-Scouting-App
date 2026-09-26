@@ -557,7 +557,7 @@ function Stat({ label, value, compact = false }: { label: string; value: string;
   );
 }
 
-function FieldSchematic({
+function FieldImage({
   blueTeams,
   redTeams,
 }: {
@@ -565,76 +565,35 @@ function FieldSchematic({
   redTeams: number[];
 }) {
   return (
-    <div className="relative aspect-[1.75/1] min-h-[560px] w-full overflow-hidden rounded-2xl bg-[#111827]">
-      <svg viewBox="0 0 1200 690" className="h-full w-full" role="img" aria-label="REBUILT strategy field schematic">
-        <defs>
-          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#ffffff" strokeOpacity="0.04" strokeWidth="1" />
-          </pattern>
-          <linearGradient id="fieldFade" x1="0" x2="1">
-            <stop offset="0%" stopColor="#153c77" stopOpacity="0.62" />
-            <stop offset="42%" stopColor="#111827" stopOpacity="0" />
-            <stop offset="58%" stopColor="#111827" stopOpacity="0" />
-            <stop offset="100%" stopColor="#7f1d2d" stopOpacity="0.62" />
-          </linearGradient>
-        </defs>
+    <div className="relative aspect-[40/21] min-h-[520px] w-full overflow-hidden rounded-2xl bg-[#111827]">
+      <img
+        src="/assets/2026FieldImage.webp"
+        alt="2026 REBUILT field"
+        className="absolute inset-0 h-full w-full object-fill"
+        draggable={false}
+      />
 
-        <rect width="1200" height="690" rx="28" fill="#0b1220" />
-        <rect x="20" y="20" width="1160" height="650" rx="22" fill="url(#fieldFade)" stroke="#dbeafe" strokeOpacity="0.24" strokeWidth="3" />
-        <rect x="20" y="20" width="1160" height="650" rx="22" fill="url(#grid)" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-red-950/10 via-transparent to-blue-950/10" />
 
-        <rect x="40" y="70" width="245" height="550" rx="18" fill="#2563eb" fillOpacity="0.13" stroke="#60a5fa" strokeOpacity="0.42" strokeWidth="2" />
-        <rect x="915" y="70" width="245" height="550" rx="18" fill="#dc2626" fillOpacity="0.13" stroke="#f87171" strokeOpacity="0.42" strokeWidth="2" />
-        <line x1="600" x2="600" y1="25" y2="665" stroke="#f8fafc" strokeOpacity="0.25" strokeWidth="3" strokeDasharray="12 12" />
+      <div className="pointer-events-none absolute left-4 top-4 rounded-lg border border-white/15 bg-black/55 px-3 py-2 backdrop-blur-sm">
+        <div className="text-xs font-bold uppercase tracking-[0.16em] text-white">2026 REBUILT field</div>
+        <div className="text-[11px] text-slate-300">Official field image · red left · blue right</div>
+      </div>
 
-        <circle cx="600" cy="345" r="112" fill="#ffd84d" fillOpacity="0.08" stroke="#ffd84d" strokeOpacity="0.62" strokeWidth="5" />
-        <circle cx="600" cy="345" r="58" fill="#ffd84d" fillOpacity="0.14" stroke="#ffd84d" strokeOpacity="0.38" strokeWidth="3" />
-        <text x="600" y="339" textAnchor="middle" fill="#fde68a" fontSize="24" fontWeight="700">HUB</text>
-        <text x="600" y="371" textAnchor="middle" fill="#94a3b8" fontSize="14">central scoring zone</text>
-
-        <rect x="305" y="85" width="135" height="92" rx="14" fill="#0f172a" stroke="#60a5fa" strokeOpacity="0.45" strokeWidth="3" />
-        <rect x="305" y="513" width="135" height="92" rx="14" fill="#0f172a" stroke="#60a5fa" strokeOpacity="0.45" strokeWidth="3" />
-        <rect x="760" y="85" width="135" height="92" rx="14" fill="#0f172a" stroke="#f87171" strokeOpacity="0.45" strokeWidth="3" />
-        <rect x="760" y="513" width="135" height="92" rx="14" fill="#0f172a" stroke="#f87171" strokeOpacity="0.45" strokeWidth="3" />
-
-        <text x="372" y="138" textAnchor="middle" fill="#93c5fd" fontSize="16" fontWeight="700">TRENCH</text>
-        <text x="372" y="566" textAnchor="middle" fill="#93c5fd" fontSize="16" fontWeight="700">TRENCH</text>
-        <text x="827" y="138" textAnchor="middle" fill="#fca5a5" fontSize="16" fontWeight="700">TRENCH</text>
-        <text x="827" y="566" textAnchor="middle" fill="#fca5a5" fontSize="16" fontWeight="700">TRENCH</text>
-
-        <path d="M470 155 L520 115 L570 155 L520 195 Z" fill="#475569" fillOpacity="0.48" stroke="#94a3b8" strokeOpacity="0.45" strokeWidth="2" />
-        <path d="M470 535 L520 495 L570 535 L520 575 Z" fill="#475569" fillOpacity="0.48" stroke="#94a3b8" strokeOpacity="0.45" strokeWidth="2" />
-        <path d="M630 155 L680 115 L730 155 L680 195 Z" fill="#475569" fillOpacity="0.48" stroke="#94a3b8" strokeOpacity="0.45" strokeWidth="2" />
-        <path d="M630 535 L680 495 L730 535 L680 575 Z" fill="#475569" fillOpacity="0.48" stroke="#94a3b8" strokeOpacity="0.45" strokeWidth="2" />
-
-        <text x="520" y="160" textAnchor="middle" fill="#cbd5e1" fontSize="13">BUMP</text>
-        <text x="520" y="540" textAnchor="middle" fill="#cbd5e1" fontSize="13">BUMP</text>
-        <text x="680" y="160" textAnchor="middle" fill="#cbd5e1" fontSize="13">BUMP</text>
-        <text x="680" y="540" textAnchor="middle" fill="#cbd5e1" fontSize="13">BUMP</text>
-
-        <text x="162" y="54" textAnchor="middle" fill="#bfdbfe" fontSize="15" fontWeight="700">BLUE ALLIANCE</text>
-        <text x="1038" y="54" textAnchor="middle" fill="#fecaca" fontSize="15" fontWeight="700">RED ALLIANCE</text>
-
-        {blueTeams.map((team, index) => (
-          <g key={`blue-${team}`}>
-            <circle cx={155} cy={230 + index * 115} r="42" fill="#1d4ed8" stroke="#93c5fd" strokeWidth="3" />
-            <text x={155} y={237 + index * 115} textAnchor="middle" fill="#ffffff" fontSize="21" fontWeight="800">{team}</text>
-          </g>
+      <div className="pointer-events-none absolute left-[3%] top-1/2 flex -translate-y-1/2 flex-col gap-4">
+        {redTeams.map((team) => (
+          <div key={`field-red-${team}`} className="rounded-lg border-2 border-red-200/90 bg-red-700/90 px-3 py-2 text-center font-mono text-lg font-black text-white shadow-xl shadow-black/40">
+            {team}
+          </div>
         ))}
+      </div>
 
-        {redTeams.map((team, index) => (
-          <g key={`red-${team}`}>
-            <circle cx={1045} cy={230 + index * 115} r="42" fill="#b91c1c" stroke="#fca5a5" strokeWidth="3" />
-            <text x={1045} y={237 + index * 115} textAnchor="middle" fill="#ffffff" fontSize="21" fontWeight="800">{team}</text>
-          </g>
+      <div className="pointer-events-none absolute right-[3%] top-1/2 flex -translate-y-1/2 flex-col gap-4">
+        {blueTeams.map((team) => (
+          <div key={`field-blue-${team}`} className="rounded-lg border-2 border-blue-200/90 bg-blue-700/90 px-3 py-2 text-center font-mono text-lg font-black text-white shadow-xl shadow-black/40">
+            {team}
+          </div>
         ))}
-
-        <text x="600" y="640" textAnchor="middle" fill="#64748b" fontSize="14">REBUILT · strategy schematic · not to scale</text>
-      </svg>
-
-      <div className="pointer-events-none absolute left-5 top-5 rounded-lg border border-white/10 bg-black/30 px-3 py-2 backdrop-blur">
-        <div className="text-xs font-bold uppercase tracking-[0.16em] text-white">Field view</div>
-        <div className="text-[11px] text-slate-400">Use team cards for scouting context</div>
       </div>
     </div>
   );
