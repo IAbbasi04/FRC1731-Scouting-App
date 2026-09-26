@@ -16,6 +16,7 @@ import type {
 const STORAGE_KEY = "1731.pit-scouting.entries.v1";
 const PREFS_KEY = "1731.pit-scouting.prefs.v1";
 const TEAM_CACHE_PREFIX = "1731.pit-scouting.teams.v1.";
+const ICEBREAKER_EVENT_KEY = "2026vaale1";
 
 function loadEntries() {
   try {
@@ -46,7 +47,7 @@ export function PitScoutingForm() {
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const [eventKey, setEventKey] = useState("");
+  const [eventKey, setEventKey] = useState(ICEBREAKER_EVENT_KEY);
   const [teamNumber, setTeamNumber] = useState("");
   const [drivetrain, setDrivetrain] = useState<PitDrivetrain>("unknown");
   const [widthIn, setWidthIn] = useState("");
@@ -75,7 +76,7 @@ export function PitScoutingForm() {
       const rawPrefs = window.localStorage.getItem(PREFS_KEY);
       if (rawPrefs) {
         const prefs = JSON.parse(rawPrefs) as { eventKey?: string };
-        const savedEvent = prefs.eventKey ?? "";
+        const savedEvent = ICEBREAKER_EVENT_KEY;
         setEventKey(savedEvent);
         if (savedEvent) {
           const cachedTeams = window.localStorage.getItem(`${TEAM_CACHE_PREFIX}${savedEvent.toLowerCase()}`);
