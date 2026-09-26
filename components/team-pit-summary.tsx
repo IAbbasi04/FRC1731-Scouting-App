@@ -8,6 +8,7 @@ type CloudPitEntry = {
   clientId: string;
   createdAt: string;
   scoutName: string;
+  robotPhotoDataUrl?: string;
   drivetrain: string;
   widthIn?: number;
   lengthIn?: number;
@@ -101,6 +102,12 @@ export function TeamPitSummary({ eventKey, teamNumber }: { eventKey: string; tea
         </div>
         <div className="text-right text-xs text-slate-500">Scouted by {entry.scoutName}</div>
       </div>
+
+      {entry.robotPhotoDataUrl ? (
+        <div className="mt-5 overflow-hidden rounded-2xl border border-blue-300/15 bg-[#07111f]">
+          <img src={entry.robotPhotoDataUrl} alt={`Team ${teamNumber} robot`} className="max-h-[520px] w-full object-contain" />
+        </div>
+      ) : null}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Drivetrain" value={labels[entry.drivetrain] ?? entry.drivetrain} />

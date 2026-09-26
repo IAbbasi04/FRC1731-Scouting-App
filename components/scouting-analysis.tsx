@@ -1,10 +1,10 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConvexHttpClient } from "convex/browser";
 import { makeFunctionReference } from "convex/server";
-import { AlertTriangle, CheckCircle2, Search } from "lucide-react";
-import { getScoutingSeason, inferSeasonFromEventKey, type GameField } from "@/config/scouting/seasons";
+import { BarChart3, Eye, EyeOff, RefreshCw } from "lucide-react";
+import { getScoutingSeason, type GameField } from "@/config/scouting/seasons";
 
 type CloudEntry = {
   _id: string;
@@ -17,6 +17,7 @@ type CloudEntry = {
   scoutName: string;
   createdAt: string;
   alliance?: "red" | "blue";
+  autoStart?: { x: number; y: number };
   gameData: Record<string, string | number | boolean | null>;
   defense: "none" | "light" | "heavy";
   driverRating?: number;
@@ -35,127 +36,113 @@ type TeamSummary = {
   entries: CloudEntry[];
 };
 
-type ConfidenceLevel = "high" | "medium" | "low";
+type MetricKind = "number" | "percent" | "category";
 
-type QualityAssessment = {
-  level: ConfidenceLevel;
-  uniqueMatches: number;
-  uniqueScouts: number;
-  missingFields: string[];
-  conflictingMatches: number;
-  outlierFields: string[];
-  reasons: string[];
+type MetricResult = {
+  value: number | null;
+  display: string;
+  detail?: string;
 };
 
+type MetricDefinition = {
+  key: string;
+  label: string;
+  kind: MetricKind;
+  result: (entries: CloudEntry[]) => MetricResult;
+};
+
+const EVENT_KEY = "2026vaale1";
 const listEventEntries = makeFunctionReference<"query">("analysis:listEventEntries");
 
 function average(values: number[]) {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
 }
 
-function percent(value: number | null) {
-  return value === null ? "—" : `${Math.round(value * 100)}%`;
+function formatNumber(value: number | null, digits = 1) {
+  if (value === null || !Number.isFinite(value)) return "—";
+  return Number.isInteger(value) ? String(value) : value.toFixed(digits);
 }
 
-function formatNumber(value: number | null) {
-  if (value === null) return "—";
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+function numericValues(entries: CloudEntry[], select: (entry: CloudEntry) => unknown) {
+  return entries
+    .map(select)
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
 }
 
-function averageOptional(entries: CloudEntry[], select: (entry: CloudEntry) => number | undefined) {
-  const values = entries.map(select).filter((value): value is number => typeof value === "number");
-  return average(values);
+function numberMetric(entries: CloudEntry[], select: (entry: CloudEntry) => unknown): MetricResult {
+  const values = numericValues(entries, select);
+  const value = average(values);
+  return { value, display: formatNumber(value), detail: `${values.length}/${entries.length} reports` };
 }
 
-function booleanRate(entries: CloudEntry[], select: (entry: CloudEntry) => boolean | undefined) {
+function percentMetric(entries: CloudEntry[], select: (entry: CloudEntry) => unknown): MetricResult {
   const values = entries.map(select).filter((value): value is boolean => typeof value === "boolean");
-  return values.length ? values.filter(Boolean).length / values.length : null;
+  const value = values.length ? (values.filter(Boolean).length / values.length) * 100 : null;
+  return {
+    value,
+    display: value === null ? "—" : `${Math.round(value)}%`,
+    detail: `${values.length}/${entries.length} reports`,
+  };
 }
 
-function hasReportConflict(entries: CloudEntry[]) {
-  if (entries.length < 2) return false;
+function categoryMetric(
+  entries: CloudEntry[],
+  select: (entry: CloudEntry) => unknown,
+  labelForValue?: (value: string) => string,
+): MetricResult {
+  const values = entries.map(select).filter((value): value is string => typeof value === "string" && value.length > 0);
+  if (!values.length) return { value: null, display: "—", detail: "no reports" };
 
-  const categoricalChecks: unknown[][] = [
-    entries.map((entry) => entry.disabled),
-    entries.map((entry) => entry.tipped),
-    entries.map((entry) => entry.mechanicalIssue),
-    entries.map((entry) => entry.playedDefense),
-    entries.map((entry) => entry.defense),
-  ];
-  if (categoricalChecks.some((values) => new Set(values).size > 1)) return true;
-
-  const driverRatings = entries.map((entry) => entry.driverRating).filter((value): value is number => typeof value === "number");
-  if (driverRatings.length > 1 && Math.max(...driverRatings) - Math.min(...driverRatings) >= 3) return true;
-
-  const penalties = entries.map((entry) => entry.penalties);
-  if (penalties.length > 1 && Math.max(...penalties) - Math.min(...penalties) >= 3) return true;
-
-  return false;
+  const counts = new Map<string, number>();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+  const share = (top[1] / values.length) * 100;
+  return {
+    value: share,
+    display: labelForValue ? labelForValue(top[0]) : top[0],
+    detail: `${Math.round(share)}% of ${values.length} reports`,
+  };
 }
 
-function findPotentialOutlierFields(entries: CloudEntry[], fields: GameField[]) {
-  return fields
-    .filter((field) => field.type === "counter" || field.type === "number")
-    .filter((field) => {
-      const values = entries
-        .map((entry) => entry.gameData[field.key])
-        .filter((value): value is number => typeof value === "number")
-        .sort((a, b) => a - b);
-      if (values.length < 5) return false;
-
-      const q1 = values[Math.floor((values.length - 1) * 0.25)];
-      const q3 = values[Math.floor((values.length - 1) * 0.75)];
-      const iqr = q3 - q1;
-      if (iqr <= 0) return false;
-
-      const lower = q1 - 1.5 * iqr;
-      const upper = q3 + 1.5 * iqr;
-      return values.some((value) => value < lower || value > upper);
-    })
-    .map((field) => field.label);
+function towerPoints(value: unknown): number | null {
+  if (value === "level1") return 10;
+  if (value === "level2") return 20;
+  if (value === "level3") return 30;
+  if (value === "none") return 0;
+  return null;
 }
 
-function assessQuality(entries: CloudEntry[], fields: GameField[]): QualityAssessment {
-  const uniqueMatches = new Set(entries.map((entry) => entry.matchNumber)).size;
-  const uniqueScouts = new Set(entries.map((entry) => entry.scoutName.trim().toLowerCase()).filter(Boolean)).size;
-  const missingFields = fields
-    .filter((field) => entries.some((entry) => entry.gameData[field.key] === undefined || entry.gameData[field.key] === null))
-    .map((field) => field.label);
+function optionLabel(field: GameField, value: string) {
+  return field.options?.find((option) => option.value === value)?.label ?? value;
+}
 
-  const byMatch = new Map<number, CloudEntry[]>();
-  for (const entry of entries) {
-    const reports = byMatch.get(entry.matchNumber) ?? [];
-    reports.push(entry);
-    byMatch.set(entry.matchNumber, reports);
-  }
-  const conflictingMatches = [...byMatch.values()].filter(hasReportConflict).length;
-  const outlierFields = findPotentialOutlierFields(entries, fields);
+function phaseLabel(field: GameField) {
+  const prefix = field.phase === "auto" ? "Auto" : field.phase === "teleop" ? "Teleop" : "Endgame";
+  return `${prefix} ${field.label}`;
+}
 
-  const reasons: string[] = [];
-  if (uniqueMatches <= 1) reasons.push("Only one unique match observed");
-  else if (uniqueMatches < 4) reasons.push(`Small sample: ${uniqueMatches} unique matches`);
-  if (uniqueScouts <= 1) reasons.push("All observations come from one scout");
-  if (missingFields.length) reasons.push(`Missing observations in ${missingFields.length} configured field${missingFields.length === 1 ? "" : "s"}`);
-  if (conflictingMatches) reasons.push(`Conflicting reports in ${conflictingMatches} match${conflictingMatches === 1 ? "" : "es"}`);
-  if (outlierFields.length) reasons.push(`Potential numeric outlier${outlierFields.length === 1 ? "" : "s"} in ${outlierFields.slice(0, 2).join(", ")}${outlierFields.length > 2 ? "…" : ""}`);
+function confidence(entries: CloudEntry[]) {
+  const matches = new Set(entries.map((entry) => entry.matchNumber)).size;
+  const scouts = new Set(entries.map((entry) => entry.scoutName.trim().toLowerCase()).filter(Boolean)).size;
+  if (matches >= 4 && scouts >= 2) return "High";
+  if (matches >= 2) return "Medium";
+  return "Low";
+}
 
-  const manyMissingFields = missingFields.length >= Math.max(2, Math.ceil(fields.length * 0.25));
-  let level: ConfidenceLevel = "high";
-  if (uniqueMatches <= 1 || conflictingMatches >= 2 || manyMissingFields) level = "low";
-  else if (uniqueMatches < 4 || uniqueScouts < 2 || conflictingMatches > 0 || missingFields.length > 0 || outlierFields.length > 0) level = "medium";
-
-  return { level, uniqueMatches, uniqueScouts, missingFields, conflictingMatches, outlierFields, reasons };
+function confidenceClass(level: string) {
+  if (level === "High") return "text-emerald-300";
+  if (level === "Medium") return "text-yellow-200";
+  return "text-orange-300";
 }
 
 export function ScoutingAnalysis() {
-  const [eventKey] = useState("2026vaale1");
-  const [loadedEvent, setLoadedEvent] = useState("");
   const [entries, setEntries] = useState<CloudEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const [showGraphs, setShowGraphs] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const season = inferSeasonFromEventKey(loadedEvent || eventKey) ?? 2026;
-  const config = getScoutingSeason(season);
+  const config = getScoutingSeason(2026);
 
   const teams = useMemo<TeamSummary[]>(() => {
     const map = new Map<number, CloudEntry[]>();
@@ -165,192 +152,314 @@ export function ScoutingAnalysis() {
       map.set(entry.teamNumber, current);
     }
     return [...map.entries()]
-      .map(([teamNumber, teamEntries]) => ({ teamNumber, entries: teamEntries.sort((a, b) => a.matchNumber - b.matchNumber) }))
+      .map(([teamNumber, teamEntries]) => ({
+        teamNumber,
+        entries: teamEntries.sort((a, b) => a.matchNumber - b.matchNumber),
+      }))
       .sort((a, b) => a.teamNumber - b.teamNumber);
   }, [entries]);
 
-  const qualityAssessments = useMemo(
-    () => teams.map((team) => assessQuality(team.entries, config.fields)),
-    [teams, config.fields],
-  );
+  const metrics = useMemo<MetricDefinition[]>(() => {
+    const derived: MetricDefinition[] = [
+      {
+        key: "autoFuel",
+        label: "Auto fuel avg",
+        kind: "number",
+        result: (teamEntries) => numberMetric(teamEntries, (entry) => entry.gameData.autoFuelScoredEstimate),
+      },
+      {
+        key: "teleopFuel",
+        label: "Teleop fuel avg",
+        kind: "number",
+        result: (teamEntries) => numberMetric(teamEntries, (entry) => entry.gameData.teleopFuelScoredEstimate),
+      },
+      {
+        key: "totalFuel",
+        label: "Total fuel avg",
+        kind: "number",
+        result: (teamEntries) => {
+          const values = teamEntries
+            .map((entry) => {
+              const auto = entry.gameData.autoFuelScoredEstimate;
+              const teleop = entry.gameData.teleopFuelScoredEstimate;
+              if (typeof auto !== "number" && typeof teleop !== "number") return null;
+              return (typeof auto === "number" ? auto : 0) + (typeof teleop === "number" ? teleop : 0);
+            })
+            .filter((value): value is number => typeof value === "number");
+          const value = average(values);
+          return { value, display: formatNumber(value), detail: `${values.length}/${teamEntries.length} reports` };
+        },
+      },
+      {
+        key: "climbPoints",
+        label: "Climb pts avg",
+        kind: "number",
+        result: (teamEntries) => {
+          const values = teamEntries
+            .map((entry) => towerPoints(entry.gameData.towerLevel))
+            .filter((value): value is number => value !== null);
+          const value = average(values);
+          return { value, display: formatNumber(value), detail: "L1 10 · L2 20 · L3 30" };
+        },
+      },
+    ];
 
-  async function load(event: FormEvent) {
-    event.preventDefault();
+    const gameFields = config.fields
+      .filter((field) => !["autoFuelScoredEstimate", "teleopFuelScoredEstimate"].includes(field.key))
+      .map<MetricDefinition>((field) => {
+        if (field.type === "counter" || field.type === "number") {
+          return {
+            key: field.key,
+            label: phaseLabel(field),
+            kind: "number",
+            result: (teamEntries) => numberMetric(teamEntries, (entry) => entry.gameData[field.key]),
+          };
+        }
+        if (field.type === "toggle") {
+          return {
+            key: field.key,
+            label: phaseLabel(field),
+            kind: "percent",
+            result: (teamEntries) => percentMetric(teamEntries, (entry) => entry.gameData[field.key]),
+          };
+        }
+        return {
+          key: field.key,
+          label: phaseLabel(field),
+          kind: "category",
+          result: (teamEntries) => categoryMetric(teamEntries, (entry) => entry.gameData[field.key], (value) => optionLabel(field, value)),
+        };
+      });
+
+    const standard: MetricDefinition[] = [
+      {
+        key: "autoStartX",
+        label: "Auto start X avg",
+        kind: "number",
+        result: (teamEntries) => numberMetric(teamEntries, (entry) => entry.autoStart?.x),
+      },
+      {
+        key: "autoStartY",
+        label: "Auto start Y avg",
+        kind: "number",
+        result: (teamEntries) => numberMetric(teamEntries, (entry) => entry.autoStart?.y),
+      },
+      {
+        key: "driverRating",
+        label: "Driver rating avg",
+        kind: "number",
+        result: (teamEntries) => numberMetric(teamEntries, (entry) => entry.driverRating),
+      },
+      {
+        key: "playedDefense",
+        label: "Played defense",
+        kind: "percent",
+        result: (teamEntries) => percentMetric(teamEntries, (entry) => entry.playedDefense),
+      },
+      {
+        key: "defenseRating",
+        label: "Defense rating avg",
+        kind: "number",
+        result: (teamEntries) => numberMetric(teamEntries, (entry) => entry.defenseRating),
+      },
+      {
+        key: "defenseLevel",
+        label: "Defense faced",
+        kind: "category",
+        result: (teamEntries) => categoryMetric(teamEntries, (entry) => entry.defense, (value) => value[0].toUpperCase() + value.slice(1)),
+      },
+      {
+        key: "heavyDefense",
+        label: "Heavily guarded",
+        kind: "percent",
+        result: (teamEntries) => percentMetric(teamEntries, (entry) => entry.defense === "heavy"),
+      },
+      {
+        key: "penalties",
+        label: "Penalties avg",
+        kind: "number",
+        result: (teamEntries) => numberMetric(teamEntries, (entry) => entry.penalties),
+      },
+      {
+        key: "disabled",
+        label: "Disabled rate",
+        kind: "percent",
+        result: (teamEntries) => percentMetric(teamEntries, (entry) => entry.disabled),
+      },
+      {
+        key: "tipped",
+        label: "Tipped rate",
+        kind: "percent",
+        result: (teamEntries) => percentMetric(teamEntries, (entry) => entry.tipped),
+      },
+      {
+        key: "mechanicalIssue",
+        label: "Mechanical issue rate",
+        kind: "percent",
+        result: (teamEntries) => percentMetric(teamEntries, (entry) => entry.mechanicalIssue),
+      },
+      {
+        key: "reliabilityIssue",
+        label: "Any reliability issue",
+        kind: "percent",
+        result: (teamEntries) => percentMetric(teamEntries, (entry) => entry.disabled || entry.tipped || entry.mechanicalIssue),
+      },
+    ];
+
+    return [...derived, ...gameFields, ...standard];
+  }, [config.fields]);
+
+  const loadData = useCallback(async () => {
     setError(null);
     setLoading(true);
     try {
       const url = process.env.NEXT_PUBLIC_CONVEX_URL;
       if (!url) throw new Error("NEXT_PUBLIC_CONVEX_URL is not configured.");
       const client = new ConvexHttpClient(url);
-      const normalized = eventKey.trim().toLowerCase();
-      const result = await client.query(listEventEntries, { eventKey: normalized }) as CloudEntry[];
+      const result = await client.query(listEventEntries, { eventKey: EVENT_KEY }) as CloudEntry[];
       setEntries(result);
-      setLoadedEvent(normalized);
+      setLoaded(true);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load scouting data.");
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   return (
-    <div className="space-y-6">
-      <form onSubmit={load} className="flex flex-col gap-3 rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/80 p-4 sm:flex-row sm:items-end">
-        <label className="flex-1 space-y-2 text-sm">
-          <span className="font-medium text-slate-300">Event key</span>
-          <div className="w-full rounded-xl border border-blue-300/20 bg-[#07111f] px-3 py-2.5 font-mono text-[#ffd84d]">2026vaale1</div>
-        </label>
-        <button type="submit" disabled={loading || !eventKey.trim()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#ffd84d] px-5 py-2.5 font-semibold text-[#07111f] disabled:opacity-50">
-          <Search size={17} /> {loading ? "Loading…" : "Analyze event"}
-        </button>
-      </form>
+    <div className="space-y-5">
+      <section className="flex flex-col gap-3 rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/80 p-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#ffd84d]">{EVENT_KEY} · {config.gameName}</div>
+          <div className="mt-1 text-sm text-slate-400">
+            {loaded ? `${teams.length} teams · ${entries.length} scouting reports` : "Loading event scouting data…"}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setShowGraphs((current) => !current)}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-blue-300/20 px-4 text-sm font-semibold text-slate-200 hover:border-[#ffd84d]/40"
+          >
+            {showGraphs ? <EyeOff size={16} /> : <Eye size={16} />}
+            {showGraphs ? "Hide graphs" : "Show graphs"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void loadData()}
+            disabled={loading}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#ffd84d] px-4 text-sm font-semibold text-[#07111f] hover:bg-yellow-300 disabled:opacity-50"
+          >
+            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+            {loading ? "Refreshing…" : "Refresh data"}
+          </button>
+        </div>
+      </section>
 
       {error ? <div className="rounded-xl border border-red-400/20 bg-red-950/20 p-4 text-sm text-red-200">{error}</div> : null}
 
-      {loadedEvent ? (
-        <>
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <SummaryCard label="Event" value={loadedEvent} />
-            <SummaryCard label="Season" value={`${config.year} · ${config.gameName}`} />
-            <SummaryCard label="Cloud entries" value={String(entries.length)} />
-            <SummaryCard label="Teams scouted" value={String(teams.length)} />
-          </section>
+      {loaded && teams.length === 0 ? (
+        <div className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/70 p-6 text-slate-400">No synced scouting entries found for Icebreaker yet.</div>
+      ) : null}
 
-          {qualityAssessments.length ? <DataQualitySummary assessments={qualityAssessments} /> : null}
+      {teams.length ? (
+        <section className="overflow-hidden rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/75">
+          <div className="border-b border-blue-400/10 bg-[#11243d] px-4 py-3">
+            <h2 className="font-semibold text-white">Per-game team averages</h2>
+            <p className="mt-1 text-xs text-slate-500">Scroll horizontally for every scouted metric. Percent columns are the share of observed matches where the condition was true; category columns show the most common response.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-max border-collapse text-sm">
+              <thead className="bg-[#091524] text-left text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                <tr>
+                  <th className="sticky left-0 z-20 min-w-24 border-b border-r border-blue-400/10 bg-[#091524] px-3 py-3">Team</th>
+                  <th className="sticky left-24 z-20 min-w-20 border-b border-r border-blue-400/10 bg-[#091524] px-3 py-3 text-center">Matches</th>
+                  <th className="min-w-24 border-b border-r border-blue-400/10 px-3 py-3">Confidence</th>
+                  {metrics.map((metric) => (
+                    <th key={metric.key} className="min-w-32 border-b border-r border-blue-400/10 px-3 py-3">{metric.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-blue-400/10">
+                {teams.map((team) => {
+                  const uniqueMatches = new Set(team.entries.map((entry) => entry.matchNumber)).size;
+                  const confidenceLevel = confidence(team.entries);
+                  return (
+                    <tr key={team.teamNumber} className="hover:bg-[#0b5fff]/5">
+                      <td className="sticky left-0 z-10 border-r border-blue-400/10 bg-[#0d1b2e] px-3 py-3 text-lg font-bold text-[#ffd84d]">{team.teamNumber}</td>
+                      <td className="sticky left-24 z-10 border-r border-blue-400/10 bg-[#0d1b2e] px-3 py-3 text-center font-mono font-semibold text-white">{uniqueMatches}</td>
+                      <td className={`border-r border-blue-400/10 px-3 py-3 font-semibold ${confidenceClass(confidenceLevel)}`}>{confidenceLevel}</td>
+                      {metrics.map((metric) => {
+                        const result = metric.result(team.entries);
+                        return (
+                          <td key={metric.key} className="border-r border-blue-400/10 px-3 py-3 align-top">
+                            <div className="font-semibold text-slate-100">{result.display}</div>
+                            {result.detail ? <div className="mt-0.5 text-[10px] text-slate-600">{result.detail}</div> : null}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="border-t border-blue-400/10 px-4 py-3 text-xs text-slate-600">
+            Climb points use the 2026 endgame tower values: Level 1 = 10, Level 2 = 20, Level 3 = 30.
+          </div>
+        </section>
+      ) : null}
 
-          {teams.length === 0 ? (
-            <div className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/70 p-6 text-slate-400">No synced scouting entries found for this event.</div>
-          ) : (
-            <div className="grid gap-5 xl:grid-cols-2">
-              {teams.map((team) => <TeamAnalysisCard key={team.teamNumber} team={team} fields={config.fields} />)}
+      {showGraphs && teams.length ? (
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <BarChart3 size={19} className="text-[#ffd84d]" />
+            <div>
+              <h2 className="font-semibold text-white">Metric graphs</h2>
+              <p className="text-xs text-slate-500">One team comparison graph for every table metric. For categorical metrics, the bar shows how consistently scouts agreed on the displayed most-common category.</p>
             </div>
-          )}
-        </>
+          </div>
+          <div className="grid gap-4 xl:grid-cols-2">
+            {metrics.map((metric) => <MetricChart key={metric.key} metric={metric} teams={teams} />)}
+          </div>
+        </section>
       ) : null}
     </div>
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-2xl border border-blue-400/15 bg-[#0d1b2e]/75 p-4"><div className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</div><div className="mt-2 text-xl font-bold text-white">{value}</div></div>;
-}
-
-function DataQualitySummary({ assessments }: { assessments: QualityAssessment[] }) {
-  const high = assessments.filter((assessment) => assessment.level === "high").length;
-  const medium = assessments.filter((assessment) => assessment.level === "medium").length;
-  const low = assessments.filter((assessment) => assessment.level === "low").length;
-  const needsAttention = medium + low;
+function MetricChart({ metric, teams }: { metric: MetricDefinition; teams: TeamSummary[] }) {
+  const rows = teams.map((team) => ({ teamNumber: team.teamNumber, result: metric.result(team.entries) }));
+  const finiteValues = rows.map((row) => row.result.value).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  const max = metric.kind === "percent" || metric.kind === "category"
+    ? 100
+    : Math.max(1, ...finiteValues);
 
   return (
-    <section className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/80 p-4 sm:p-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          {low > 0 ? <AlertTriangle size={20} className="mt-0.5 shrink-0 text-amber-300" /> : <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-emerald-300" />}
-          <div>
-            <h2 className="font-semibold text-white">Data confidence</h2>
-            <p className="mt-1 text-sm text-slate-400">
-              {needsAttention === 0 ? "All scouted teams currently have strong coverage." : `${needsAttention} team${needsAttention === 1 ? "" : "s"} need more coverage or a data review.`}
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2 text-xs font-semibold">
-          <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-emerald-200">High {high}</span>
-          <span className="rounded-full border border-yellow-300/20 bg-yellow-300/10 px-3 py-1 text-yellow-100">Medium {medium}</span>
-          <span className="rounded-full border border-red-400/20 bg-red-400/10 px-3 py-1 text-red-200">Low {low}</span>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function TeamAnalysisCard({ team, fields }: { team: TeamSummary; fields: GameField[] }) {
-  const entries = team.entries;
-  const quality = assessQuality(entries, fields);
-  const issueCount = entries.filter((entry) => entry.disabled || entry.tipped || entry.mechanicalIssue).length;
-  const heavilyGuarded = entries.filter((entry) => entry.defense === "heavy").length;
-  const avgDriverRating = averageOptional(entries, (entry) => entry.driverRating);
-  const playedDefenseRate = booleanRate(entries, (entry) => entry.playedDefense);
-  const avgDefenseRating = averageOptional(entries, (entry) => entry.defenseRating);
-  const avgPenalties = average(entries.map((entry) => entry.penalties));
-  const notes = entries.filter((entry) => entry.notes.trim()).slice(-3).reverse();
-
-  return (
-    <article className="overflow-hidden rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/80">
-      <header className="flex items-center justify-between gap-4 border-b border-blue-400/10 bg-[#11243d] px-5 py-4">
-        <div><div className="text-xs uppercase tracking-[0.16em] text-slate-500">Team</div><h2 className="text-2xl font-bold text-[#ffd84d]">{team.teamNumber}</h2></div>
-        <div className="flex items-center gap-4">
-          <ConfidenceBadge level={quality.level} />
-          <div className="text-right"><div className="text-2xl font-bold text-white">{entries.length}</div><div className="text-xs text-slate-500">reports</div></div>
-        </div>
-      </header>
-
-      <div className="border-b border-blue-400/10 bg-[#0a1728] px-5 py-3 text-xs text-slate-400">
-        <span className="font-medium text-slate-300">{quality.uniqueMatches} unique matches · {quality.uniqueScouts} scout{quality.uniqueScouts === 1 ? "" : "s"}</span>
-        <span className="mx-2 text-slate-700">•</span>
-        {quality.reasons.length ? quality.reasons.join(" · ") : "No missing fields, report conflicts, or statistical outliers detected."}
-      </div>
-
-      <div className="grid grid-cols-2 gap-px bg-blue-400/10 sm:grid-cols-3">
-        <SmallStat label="Reliability issues" value={percent(issueCount / entries.length)} />
-        <SmallStat label="Heavily guarded" value={percent(heavilyGuarded / entries.length)} />
-        <SmallStat label="Avg driver rating" value={formatNumber(avgDriverRating)} />
-        <SmallStat label="Played defense" value={percent(playedDefenseRate)} />
-        <SmallStat label="Avg defense quality" value={formatNumber(avgDefenseRating)} />
-        <SmallStat label="Avg penalties" value={formatNumber(avgPenalties)} />
-      </div>
-
-      <div className="space-y-5 p-5">
-        {(["auto", "teleop", "endgame"] as const).map((phase) => {
-          const phaseFields = fields.filter((field) => field.phase === phase);
-          if (!phaseFields.length) return null;
-          return <div key={phase}><h3 className="mb-3 text-sm font-semibold uppercase tracking-[0.14em] text-slate-400">{phase}</h3><div className="grid gap-3 sm:grid-cols-2">{phaseFields.map((field) => <FieldMetric key={field.key} field={field} entries={entries} />)}</div></div>;
+    <article className="rounded-2xl border border-blue-400/15 bg-[#0d1b2e]/70 p-4">
+      <h3 className="font-semibold text-white">{metric.label}</h3>
+      <p className="mt-1 text-[11px] text-slate-600">
+        {metric.kind === "category" ? "Bar length = agreement with the most common reported category." : metric.kind === "percent" ? "Percentage of observed reports." : "Average per observed match."}
+      </p>
+      <div className="mt-4 max-h-80 space-y-2 overflow-y-auto pr-1">
+        {rows.map((row) => {
+          const value = row.result.value;
+          const width = value === null ? 0 : Math.max(0, Math.min(100, (value / max) * 100));
+          return (
+            <div key={row.teamNumber} className="grid grid-cols-[58px_minmax(0,1fr)_90px] items-center gap-2">
+              <div className="font-mono text-xs font-semibold text-[#ffd84d]">{row.teamNumber}</div>
+              <div className="h-3 overflow-hidden rounded-full bg-[#07111f]">
+                <div className="h-full rounded-full bg-[#0b5fff]" style={{ width: `${width}%` }} />
+              </div>
+              <div className="truncate text-right text-xs font-semibold text-slate-300" title={row.result.display}>{row.result.display}</div>
+            </div>
+          );
         })}
-
-        <div>
-          <h3 className="mb-2 text-sm font-semibold uppercase tracking-[0.14em] text-slate-400">Recent notes</h3>
-          {notes.length ? <div className="space-y-2">{notes.map((entry) => <div key={entry.clientId} className="rounded-xl border border-blue-300/10 bg-[#07111f]/60 p-3 text-sm text-slate-300"><div className="mb-1 text-xs text-slate-600">Q{entry.matchNumber} · {entry.scoutName}</div>{entry.notes}</div>)}</div> : <div className="text-sm text-slate-600">No notes recorded.</div>}
-        </div>
       </div>
     </article>
   );
-}
-
-function ConfidenceBadge({ level }: { level: ConfidenceLevel }) {
-  const styles = {
-    high: "border-emerald-400/25 bg-emerald-400/10 text-emerald-200",
-    medium: "border-yellow-300/25 bg-yellow-300/10 text-yellow-100",
-    low: "border-red-400/25 bg-red-400/10 text-red-200",
-  } satisfies Record<ConfidenceLevel, string>;
-
-  return <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${styles[level]}`}>{level} confidence</span>;
-}
-
-function SmallStat({ label, value }: { label: string; value: string }) {
-  return <div className="bg-[#07111f]/70 p-3 text-center"><div className="text-lg font-bold text-white">{value}</div><div className="text-[11px] text-slate-500">{label}</div></div>;
-}
-
-function FieldMetric({ field, entries }: { field: GameField; entries: CloudEntry[] }) {
-  const values = entries.map((entry) => entry.gameData[field.key]).filter((value) => value !== undefined && value !== null);
-
-  if (field.type === "counter" || field.type === "number") {
-    const nums = values.filter((value): value is number => typeof value === "number");
-    return <MetricBox label={field.label} value={formatNumber(average(nums))} detail={`${nums.length}/${entries.length} reports · average`} />;
-  }
-
-  if (field.type === "toggle") {
-    const bools = values.filter((value): value is boolean => typeof value === "boolean");
-    const rate = bools.length ? bools.filter(Boolean).length / bools.length : null;
-    return <MetricBox label={field.label} value={percent(rate)} detail={`${bools.length}/${entries.length} reports · yes rate`} />;
-  }
-
-  const strings = values.filter((value): value is string => typeof value === "string");
-  const counts = new Map<string, number>();
-  for (const value of strings) counts.set(value, (counts.get(value) ?? 0) + 1);
-  const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-  const optionLabel = field.options?.find((option) => option.value === top?.[0])?.label ?? top?.[0];
-  return <MetricBox label={field.label} value={optionLabel ?? "—"} detail={top ? `${top[1]}/${strings.length} matching · ${strings.length}/${entries.length} reports` : "no data"} />;
-}
-
-function MetricBox({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return <div className="rounded-xl border border-blue-300/10 bg-[#07111f]/55 p-3"><div className="text-xs text-slate-500">{label}</div><div className="mt-1 text-lg font-semibold text-white">{value}</div><div className="text-[11px] text-slate-600">{detail}</div></div>;
 }

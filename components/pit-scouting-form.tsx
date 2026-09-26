@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Cloud, CloudOff, RefreshCw, Save, Users } from "lucide-react";
+import { Camera, Cloud, CloudOff, RefreshCw, Save, Users, X } from "lucide-react";
 import { useScouterSession } from "@/components/scouter-session";
 import { syncPendingPitEntries, syncPitEntry } from "@/lib/pit-scouting-sync";
 import type { TbaTeam } from "@/types/frc";
@@ -17,6 +17,53 @@ const STORAGE_KEY = "1731.pit-scouting.entries.v1";
 const PREFS_KEY = "1731.pit-scouting.prefs.v1";
 const TEAM_CACHE_PREFIX = "1731.pit-scouting.teams.v1.";
 const ICEBREAKER_EVENT_KEY = "2026vaale1";
+const MAX_PHOTO_DATA_URL_CHARS = 180_000;
+
+function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Could not read image."));
+    reader.onerror = () => reject(new Error("Could not read image."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Could not decode image."));
+    image.src = src;
+  });
+}
+
+async function compressRobotPhoto(file: File) {
+  if (!file.type.startsWith("image/")) throw new Error("Choose a photo file.");
+
+  const source = await fileToDataUrl(file);
+  const image = await loadImage(source);
+  const attempts = [
+    { maxDimension: 720, quality: 0.66 },
+    { maxDimension: 620, quality: 0.54 },
+    { maxDimension: 520, quality: 0.46 },
+  ];
+
+  for (const attempt of attempts) {
+    const scale = Math.min(1, attempt.maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("This browser cannot resize the image.");
+    context.drawImage(image, 0, 0, width, height);
+    const compressed = canvas.toDataURL("image/jpeg", attempt.quality);
+    if (compressed.length <= MAX_PHOTO_DATA_URL_CHARS) return compressed;
+  }
+
+  throw new Error("Photo is still too large after compression. Try a simpler or lower-resolution image.");
+}
 
 function loadEntries() {
   try {
@@ -68,6 +115,9 @@ export function PitScoutingForm() {
   const [intakeNotes, setIntakeNotes] = useState("");
   const [reliabilityNotes, setReliabilityNotes] = useState("");
   const [notes, setNotes] = useState("");
+  const [robotPhotoDataUrl, setRobotPhotoDataUrl] = useState<string | null>(null);
+  const [photoMessage, setPhotoMessage] = useState<string | null>(null);
+  const [processingPhoto, setProcessingPhoto] = useState(false);
 
   useEffect(() => {
     setEntries(loadEntries());
@@ -168,6 +218,8 @@ export function PitScoutingForm() {
   }
 
   function resetRobotFields() {
+    setRobotPhotoDataUrl(null);
+    setPhotoMessage(null);
     setDrivetrain("unknown");
     setWidthIn("");
     setLengthIn("");
@@ -207,6 +259,7 @@ export function PitScoutingForm() {
       teamNumber: parsedTeam,
       scoutName: session.name,
       createdAt: new Date().toISOString(),
+      robotPhotoDataUrl: robotPhotoDataUrl ?? undefined,
       drivetrain,
       widthIn: numericOrNull(widthIn),
       lengthIn: numericOrNull(lengthIn),
@@ -282,6 +335,59 @@ export function PitScoutingForm() {
         </section>
 
         <Section title="Robot basics">
+          <div className="mb-5 grid gap-4 md:grid-cols-[minmax(0,280px)_1fr] md:items-center">
+            <div className="overflow-hidden rounded-2xl border border-blue-300/15 bg-[#0a1525]">
+              {robotPhotoDataUrl ? (
+                <img src={robotPhotoDataUrl} alt={teamNumber ? `Team ${teamNumber} robot` : "Robot preview"} className="aspect-[4/3] w-full object-cover" />
+              ) : (
+                <div className="grid aspect-[4/3] place-items-center text-center text-slate-600">
+                  <div>
+                    <Camera className="mx-auto mb-2" size={30} />
+                    <div className="text-sm font-medium">No robot photo yet</div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div>
+              <div className="text-sm font-medium text-slate-300">Team profile photo</div>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Take or choose a robot photo. It is resized before saving so it can stay in the same offline-first pit scouting queue.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-[#0b5fff] px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-500">
+                  <Camera size={16} />
+                  {processingPhoto ? "Processing…" : robotPhotoDataUrl ? "Replace photo" : "Add photo"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    disabled={processingPhoto}
+                    className="hidden"
+                    onChange={async (event) => {
+                      const file = event.target.files?.[0];
+                      event.currentTarget.value = "";
+                      if (!file) return;
+                      setProcessingPhoto(true);
+                      setPhotoMessage(null);
+                      try {
+                        const compressed = await compressRobotPhoto(file);
+                        setRobotPhotoDataUrl(compressed);
+                        setPhotoMessage("Photo ready to save with this team profile.");
+                      } catch (error) {
+                        setPhotoMessage(error instanceof Error ? error.message : "Could not process that photo.");
+                      } finally {
+                        setProcessingPhoto(false);
+                      }
+                    }}
+                  />
+                </label>
+                {robotPhotoDataUrl ? (
+                  <button type="button" onClick={() => { setRobotPhotoDataUrl(null); setPhotoMessage("Photo removed from this unsaved entry."); }} className="inline-flex items-center gap-2 rounded-xl border border-blue-300/20 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:border-red-400/30 hover:text-red-200">
+                    <X size={16} /> Remove
+                  </button>
+                ) : null}
+              </div>
+              {photoMessage ? <p className="mt-2 text-xs text-slate-400">{photoMessage}</p> : null}
+            </div>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Drivetrain"><select value={drivetrain} onChange={(event) => setDrivetrain(event.target.value as PitDrivetrain)} className={inputClass}><option value="unknown">Unknown</option><option value="swerve">Swerve</option><option value="tank">Tank / differential</option><option value="mecanum">Mecanum</option><option value="other">Other</option></select></Field>
             <NumberField label="Width (in)" value={widthIn} onChange={setWidthIn} />

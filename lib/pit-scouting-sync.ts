@@ -25,6 +25,7 @@ export async function syncPitEntry(entry: PitScoutingEntry) {
     teamNumber: entry.teamNumber,
     scoutName: entry.scoutName,
     createdAt: entry.createdAt,
+    robotPhotoDataUrl: entry.robotPhotoDataUrl,
     drivetrain: entry.drivetrain,
     widthIn: optionalNumber(entry.widthIn),
     lengthIn: optionalNumber(entry.lengthIn),

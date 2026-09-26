@@ -41,6 +41,7 @@ export default defineSchema({
     teamNumber: v.number(),
     scoutName: v.string(),
     createdAt: v.string(),
+    robotPhotoDataUrl: v.optional(v.string()),
     drivetrain: v.string(),
     widthIn: v.optional(v.number()),
     lengthIn: v.optional(v.number()),

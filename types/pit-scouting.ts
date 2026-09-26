@@ -11,6 +11,7 @@ export interface PitScoutingEntry {
   teamNumber: number;
   scoutName: string;
   createdAt: string;
+  robotPhotoDataUrl?: string;
   drivetrain: PitDrivetrain;
   widthIn: number | null;
   lengthIn: number | null;
