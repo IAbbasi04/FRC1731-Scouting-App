@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, ClipboardList, ListChecks, LogOut, Map, Wrench } from "lucide-react";
+import { BarChart3, ClipboardList, ListChecks, LogOut, Map, Users, Wrench } from "lucide-react";
 import { MetricPreferencesButton } from "@/components/metric-preferences-button";
 import { PwaRegistration } from "@/components/pwa-registration";
 import { useScouterSession } from "@/components/scouter-session";
@@ -12,6 +12,7 @@ const baseNav = [
   { href: "/scouting", label: "Match Scout", icon: ClipboardList },
   { href: "/pit-scouting", label: "Pit", icon: Wrench },
   { href: "/analysis", label: "Data", icon: BarChart3 },
+  { href: "/teams", label: "Teams", icon: Users },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
