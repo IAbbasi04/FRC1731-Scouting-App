@@ -144,6 +144,9 @@ export function MatchStrategyBoard() {
   const [eventData, setEventData] = useState<EventData | null>(null);
   const [entries, setEntries] = useState<CloudEntry[]>([]);
   const [selectedMatchKey, setSelectedMatchKey] = useState("");
+  const [boardMode, setBoardMode] = useState<"match" | "manual">("match");
+  const [manualRed, setManualRed] = useState(["", "", ""]);
+  const [manualBlue, setManualBlue] = useState(["", "", ""]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -153,9 +156,33 @@ export function MatchStrategyBoard() {
     [matches, selectedMatchKey],
   );
 
+  const matchBlueTeams = selectedMatch?.alliances.blue.team_keys.map(teamNumberFromKey) ?? [];
+  const matchRedTeams = selectedMatch?.alliances.red.team_keys.map(teamNumberFromKey) ?? [];
+  const manualBlueTeams = manualBlue.map(Number).filter((team) => Number.isInteger(team) && team > 0);
+  const manualRedTeams = manualRed.map(Number).filter((team) => Number.isInteger(team) && team > 0);
+  const blueTeams = boardMode === "manual" ? manualBlueTeams : matchBlueTeams;
+  const redTeams = boardMode === "manual" ? manualRedTeams : matchRedTeams;
+
   const statsByTeam = useMemo(() => {
     const map = new Map<number, TeamStats>();
-    for (const team of eventData?.teams ?? []) {
+    const eventTeams = new Map((eventData?.teams ?? []).map((team) => [team.teamNumber, team]));
+    const candidateNumbers = new Set<number>([
+      ...eventTeams.keys(),
+      ...entries.map((entry) => entry.teamNumber),
+      ...blueTeams,
+      ...redTeams,
+    ]);
+
+    for (const teamNumber of candidateNumbers) {
+      const team = eventTeams.get(teamNumber) ?? {
+        teamNumber,
+        teamKey: `frc${teamNumber}`,
+        nickname: `Team ${teamNumber}`,
+        city: null,
+        stateProv: null,
+        rank: null,
+        opr: null,
+      };
       const teamEntries = entries.filter((entry) => entry.teamNumber === team.teamNumber);
       const uniqueMatches = new Set(teamEntries.map((entry) => entry.matchNumber)).size;
       const issueCount = teamEntries.filter(
@@ -184,7 +211,7 @@ export function MatchStrategyBoard() {
       });
     }
     return map;
-  }, [entries, eventData]);
+  }, [entries, eventData, blueTeams.join(","), redTeams.join(",")]);
 
   async function loadBoardData() {
     setLoading(true);
@@ -247,8 +274,26 @@ export function MatchStrategyBoard() {
     void loadBoardData();
   }, []);
 
+  function switchBoardMode(nextMode: "match" | "manual") {
+    if (
+      nextMode === "manual"
+      && selectedMatch
+      && [...manualRed, ...manualBlue].every((value) => !value.trim())
+    ) {
+      setManualRed(selectedMatch.alliances.red.team_keys.map((key) => String(teamNumberFromKey(key))));
+      setManualBlue(selectedMatch.alliances.blue.team_keys.map((key) => String(teamNumberFromKey(key))));
+    }
+    setBoardMode(nextMode);
+  }
+
+  function setManualTeam(alliance: "red" | "blue", index: number, value: string) {
+    const normalized = value.replace(/\D/g, "").slice(0, 5);
+    const setter = alliance === "red" ? setManualRed : setManualBlue;
+    setter((current) => current.map((team, teamIndex) => teamIndex === index ? normalized : team));
+  }
+
   async function downloadBoard() {
-    if (!boardRef.current || !selectedMatch) return;
+    if (!boardRef.current || (boardMode === "match" && !selectedMatch)) return;
     setDownloading(true);
     setMessage(null);
     try {
@@ -259,7 +304,9 @@ export function MatchStrategyBoard() {
         backgroundColor: "#07111f",
       });
       const anchor = document.createElement("a");
-      anchor.download = `1731-icebreaker-Q${selectedMatch.match_number}-strategy.png`;
+      anchor.download = boardMode === "manual"
+        ? "1731-icebreaker-manual-strategy.png"
+        : `1731-icebreaker-Q${selectedMatch?.match_number ?? "unknown"}-strategy.png`;
       anchor.href = dataUrl;
       anchor.click();
     } catch {
@@ -269,51 +316,76 @@ export function MatchStrategyBoard() {
     }
   }
 
-  const blueTeams = selectedMatch?.alliances.blue.team_keys.map(teamNumberFromKey) ?? [];
-  const redTeams = selectedMatch?.alliances.red.team_keys.map(teamNumberFromKey) ?? [];
-
   return (
     <div className="space-y-4">
       <section className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/85 p-4">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <label className="space-y-2 text-sm">
-              <span className="font-medium text-slate-300">Qualification match</span>
-              <select
-                value={selectedMatch?.key ?? ""}
-                onChange={(event) => setSelectedMatchKey(event.target.value)}
-                disabled={loading || !matches.length}
-                className="min-h-11 min-w-52 rounded-xl border border-blue-300/20 bg-[#07111f] px-3 py-2.5 text-white outline-none focus:border-[#0b5fff] disabled:opacity-50"
-              >
-                {!matches.length ? <option value="">No matches available</option> : null}
-                {matches.map((match) => (
-                  <option key={match.key} value={match.key}>Qualification {match.match_number}</option>
-                ))}
-              </select>
-            </label>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+            <div className="space-y-3">
+              <div className="inline-flex rounded-xl border border-blue-300/15 bg-[#07111f] p-1">
+                <button
+                  type="button"
+                  onClick={() => switchBoardMode("match")}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold ${boardMode === "match" ? "bg-[#0b5fff] text-white" : "text-slate-400 hover:text-white"}`}
+                >
+                  Actual match
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchBoardMode("manual")}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold ${boardMode === "manual" ? "bg-[#ffd84d] text-[#07111f]" : "text-slate-400 hover:text-white"}`}
+                >
+                  Manual override
+                </button>
+              </div>
+
+              {boardMode === "match" ? (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                  <label className="space-y-2 text-sm">
+                    <span className="font-medium text-slate-300">Qualification match</span>
+                    <select
+                      value={selectedMatch?.key ?? ""}
+                      onChange={(event) => setSelectedMatchKey(event.target.value)}
+                      disabled={loading || !matches.length}
+                      className="min-h-11 min-w-52 rounded-xl border border-blue-300/20 bg-[#07111f] px-3 py-2.5 text-white outline-none focus:border-[#0b5fff] disabled:opacity-50"
+                    >
+                      {!matches.length ? <option value="">No matches available</option> : null}
+                      {matches.map((match) => (
+                        <option key={match.key} value={match.key}>Qualification {match.match_number}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void loadBoardData()}
+                    disabled={loading}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-blue-300/20 px-4 py-2 text-sm font-semibold text-slate-200 hover:border-[#ffd84d]/40 disabled:opacity-50"
+                  >
+                    <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+                    {loading ? "Loading…" : "Refresh"}
+                  </button>
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <ManualAllianceInputs alliance="red" values={manualRed} onChange={setManualTeam} />
+                  <ManualAllianceInputs alliance="blue" values={manualBlue} onChange={setManualTeam} />
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
-              onClick={() => void loadBoardData()}
-              disabled={loading}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-blue-300/20 px-4 py-2 text-sm font-semibold text-slate-200 hover:border-[#ffd84d]/40 disabled:opacity-50"
+              onClick={() => void downloadBoard()}
+              disabled={(boardMode === "match" && !selectedMatch) || downloading}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#ffd84d] px-5 py-2.5 font-semibold text-[#07111f] hover:bg-yellow-300 disabled:opacity-50"
             >
-              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-              {loading ? "Loading…" : "Refresh"}
+              <Download size={17} />
+              {downloading ? "Generating image…" : "Download image"}
             </button>
           </div>
-
-          <button
-            type="button"
-            onClick={() => void downloadBoard()}
-            disabled={!selectedMatch || downloading}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#ffd84d] px-5 py-2.5 font-semibold text-[#07111f] hover:bg-yellow-300 disabled:opacity-50"
-          >
-            <Download size={17} />
-            {downloading ? "Generating image…" : "Download image"}
-          </button>
         </div>
         <p className="mt-3 text-xs leading-5 text-slate-500">
-          The field is a strategy schematic, not a scale drawing. OPR/rank are external event context; all other performance stats below come from Team 1731 scouting.
+          Actual match mode follows TBA. Manual override lets you enter any three red and three blue teams, then switch back without losing the selected qualification match. OPR/rank are event context; the remaining stats come from Team 1731 scouting.
         </p>
         {message ? <div className="mt-3 rounded-xl border border-yellow-300/20 bg-yellow-300/5 px-3 py-2 text-sm text-yellow-100">{message}</div> : null}
       </section>
@@ -327,7 +399,7 @@ export function MatchStrategyBoard() {
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffd84d]">Team 1731 · Chesapeake Robotics Icebreaker</div>
               <h2 className="mt-1 text-3xl font-bold text-white">
-                {selectedMatch ? `Qualification ${selectedMatch.match_number}` : "Match strategy board"}
+                {boardMode === "manual" ? "Manual alliance board" : selectedMatch ? `Qualification ${selectedMatch.match_number}` : "Match strategy board"}
               </h2>
             </div>
             <div className="text-right">
@@ -338,25 +410,56 @@ export function MatchStrategyBoard() {
 
           <div className="grid grid-cols-[300px_minmax(700px,1fr)_300px] gap-4">
             <AllianceColumn
-              alliance="blue"
-              teamNumbers={blueTeams}
+              alliance="red"
+              teamNumbers={redTeams}
               statsByTeam={statsByTeam}
             />
 
             <section className="overflow-hidden rounded-3xl border border-blue-300/15 bg-[#0d1b2e] p-3">
-              <FieldSchematic
+              <FieldImage
                 blueTeams={blueTeams}
                 redTeams={redTeams}
               />
             </section>
 
             <AllianceColumn
-              alliance="red"
-              teamNumbers={redTeams}
+              alliance="blue"
+              teamNumbers={blueTeams}
               statsByTeam={statsByTeam}
             />
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ManualAllianceInputs({
+  alliance,
+  values,
+  onChange,
+}: {
+  alliance: "red" | "blue";
+  values: string[];
+  onChange: (alliance: "red" | "blue", index: number, value: string) => void;
+}) {
+  const red = alliance === "red";
+  return (
+    <div className={`rounded-xl border p-3 ${red ? "border-red-400/25 bg-red-950/15" : "border-blue-400/25 bg-blue-950/15"}`}>
+      <div className={`mb-2 text-xs font-bold uppercase tracking-[0.14em] ${red ? "text-red-200" : "text-blue-200"}`}>{alliance} alliance teams</div>
+      <div className="grid grid-cols-3 gap-2">
+        {values.map((value, index) => (
+          <input
+            key={index}
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={value}
+            onChange={(event) => onChange(alliance, index, event.target.value)}
+            placeholder={`Team ${index + 1}`}
+            aria-label={`${alliance} alliance team ${index + 1}`}
+            className="min-w-0 rounded-lg border border-blue-300/15 bg-[#07111f] px-2 py-2.5 text-center font-mono text-sm font-semibold text-white outline-none focus:border-[#ffd84d]/50"
+          />
+        ))}
       </div>
     </div>
   );
@@ -454,7 +557,7 @@ function Stat({ label, value, compact = false }: { label: string; value: string;
   );
 }
 
-function FieldSchematic({
+function FieldImage({
   blueTeams,
   redTeams,
 }: {
@@ -462,76 +565,35 @@ function FieldSchematic({
   redTeams: number[];
 }) {
   return (
-    <div className="relative aspect-[1.75/1] min-h-[560px] w-full overflow-hidden rounded-2xl bg-[#111827]">
-      <svg viewBox="0 0 1200 690" className="h-full w-full" role="img" aria-label="REBUILT strategy field schematic">
-        <defs>
-          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#ffffff" strokeOpacity="0.04" strokeWidth="1" />
-          </pattern>
-          <linearGradient id="fieldFade" x1="0" x2="1">
-            <stop offset="0%" stopColor="#153c77" stopOpacity="0.62" />
-            <stop offset="42%" stopColor="#111827" stopOpacity="0" />
-            <stop offset="58%" stopColor="#111827" stopOpacity="0" />
-            <stop offset="100%" stopColor="#7f1d2d" stopOpacity="0.62" />
-          </linearGradient>
-        </defs>
+    <div className="relative aspect-[40/21] min-h-[520px] w-full overflow-hidden rounded-2xl bg-[#111827]">
+      <img
+        src="/assets/2026FieldImage.webp"
+        alt="2026 REBUILT field"
+        className="absolute inset-0 h-full w-full object-fill"
+        draggable={false}
+      />
 
-        <rect width="1200" height="690" rx="28" fill="#0b1220" />
-        <rect x="20" y="20" width="1160" height="650" rx="22" fill="url(#fieldFade)" stroke="#dbeafe" strokeOpacity="0.24" strokeWidth="3" />
-        <rect x="20" y="20" width="1160" height="650" rx="22" fill="url(#grid)" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-red-950/10 via-transparent to-blue-950/10" />
 
-        <rect x="40" y="70" width="245" height="550" rx="18" fill="#2563eb" fillOpacity="0.13" stroke="#60a5fa" strokeOpacity="0.42" strokeWidth="2" />
-        <rect x="915" y="70" width="245" height="550" rx="18" fill="#dc2626" fillOpacity="0.13" stroke="#f87171" strokeOpacity="0.42" strokeWidth="2" />
-        <line x1="600" x2="600" y1="25" y2="665" stroke="#f8fafc" strokeOpacity="0.25" strokeWidth="3" strokeDasharray="12 12" />
+      <div className="pointer-events-none absolute left-4 top-4 rounded-lg border border-white/15 bg-black/55 px-3 py-2 backdrop-blur-sm">
+        <div className="text-xs font-bold uppercase tracking-[0.16em] text-white">2026 REBUILT field</div>
+        <div className="text-[11px] text-slate-300">Official field image · red left · blue right</div>
+      </div>
 
-        <circle cx="600" cy="345" r="112" fill="#ffd84d" fillOpacity="0.08" stroke="#ffd84d" strokeOpacity="0.62" strokeWidth="5" />
-        <circle cx="600" cy="345" r="58" fill="#ffd84d" fillOpacity="0.14" stroke="#ffd84d" strokeOpacity="0.38" strokeWidth="3" />
-        <text x="600" y="339" textAnchor="middle" fill="#fde68a" fontSize="24" fontWeight="700">HUB</text>
-        <text x="600" y="371" textAnchor="middle" fill="#94a3b8" fontSize="14">central scoring zone</text>
-
-        <rect x="305" y="85" width="135" height="92" rx="14" fill="#0f172a" stroke="#60a5fa" strokeOpacity="0.45" strokeWidth="3" />
-        <rect x="305" y="513" width="135" height="92" rx="14" fill="#0f172a" stroke="#60a5fa" strokeOpacity="0.45" strokeWidth="3" />
-        <rect x="760" y="85" width="135" height="92" rx="14" fill="#0f172a" stroke="#f87171" strokeOpacity="0.45" strokeWidth="3" />
-        <rect x="760" y="513" width="135" height="92" rx="14" fill="#0f172a" stroke="#f87171" strokeOpacity="0.45" strokeWidth="3" />
-
-        <text x="372" y="138" textAnchor="middle" fill="#93c5fd" fontSize="16" fontWeight="700">TRENCH</text>
-        <text x="372" y="566" textAnchor="middle" fill="#93c5fd" fontSize="16" fontWeight="700">TRENCH</text>
-        <text x="827" y="138" textAnchor="middle" fill="#fca5a5" fontSize="16" fontWeight="700">TRENCH</text>
-        <text x="827" y="566" textAnchor="middle" fill="#fca5a5" fontSize="16" fontWeight="700">TRENCH</text>
-
-        <path d="M470 155 L520 115 L570 155 L520 195 Z" fill="#475569" fillOpacity="0.48" stroke="#94a3b8" strokeOpacity="0.45" strokeWidth="2" />
-        <path d="M470 535 L520 495 L570 535 L520 575 Z" fill="#475569" fillOpacity="0.48" stroke="#94a3b8" strokeOpacity="0.45" strokeWidth="2" />
-        <path d="M630 155 L680 115 L730 155 L680 195 Z" fill="#475569" fillOpacity="0.48" stroke="#94a3b8" strokeOpacity="0.45" strokeWidth="2" />
-        <path d="M630 535 L680 495 L730 535 L680 575 Z" fill="#475569" fillOpacity="0.48" stroke="#94a3b8" strokeOpacity="0.45" strokeWidth="2" />
-
-        <text x="520" y="160" textAnchor="middle" fill="#cbd5e1" fontSize="13">BUMP</text>
-        <text x="520" y="540" textAnchor="middle" fill="#cbd5e1" fontSize="13">BUMP</text>
-        <text x="680" y="160" textAnchor="middle" fill="#cbd5e1" fontSize="13">BUMP</text>
-        <text x="680" y="540" textAnchor="middle" fill="#cbd5e1" fontSize="13">BUMP</text>
-
-        <text x="162" y="54" textAnchor="middle" fill="#bfdbfe" fontSize="15" fontWeight="700">BLUE ALLIANCE</text>
-        <text x="1038" y="54" textAnchor="middle" fill="#fecaca" fontSize="15" fontWeight="700">RED ALLIANCE</text>
-
-        {blueTeams.map((team, index) => (
-          <g key={`blue-${team}`}>
-            <circle cx={155} cy={230 + index * 115} r="42" fill="#1d4ed8" stroke="#93c5fd" strokeWidth="3" />
-            <text x={155} y={237 + index * 115} textAnchor="middle" fill="#ffffff" fontSize="21" fontWeight="800">{team}</text>
-          </g>
+      <div className="pointer-events-none absolute left-[3%] top-1/2 flex -translate-y-1/2 flex-col gap-4">
+        {redTeams.map((team) => (
+          <div key={`field-red-${team}`} className="rounded-lg border-2 border-red-200/90 bg-red-700/90 px-3 py-2 text-center font-mono text-lg font-black text-white shadow-xl shadow-black/40">
+            {team}
+          </div>
         ))}
+      </div>
 
-        {redTeams.map((team, index) => (
-          <g key={`red-${team}`}>
-            <circle cx={1045} cy={230 + index * 115} r="42" fill="#b91c1c" stroke="#fca5a5" strokeWidth="3" />
-            <text x={1045} y={237 + index * 115} textAnchor="middle" fill="#ffffff" fontSize="21" fontWeight="800">{team}</text>
-          </g>
+      <div className="pointer-events-none absolute right-[3%] top-1/2 flex -translate-y-1/2 flex-col gap-4">
+        {blueTeams.map((team) => (
+          <div key={`field-blue-${team}`} className="rounded-lg border-2 border-blue-200/90 bg-blue-700/90 px-3 py-2 text-center font-mono text-lg font-black text-white shadow-xl shadow-black/40">
+            {team}
+          </div>
         ))}
-
-        <text x="600" y="640" textAnchor="middle" fill="#64748b" fontSize="14">REBUILT · strategy schematic · not to scale</text>
-      </svg>
-
-      <div className="pointer-events-none absolute left-5 top-5 rounded-lg border border-white/10 bg-black/30 px-3 py-2 backdrop-blur">
-        <div className="text-xs font-bold uppercase tracking-[0.16em] text-white">Field view</div>
-        <div className="text-[11px] text-slate-400">Use team cards for scouting context</div>
       </div>
     </div>
   );
