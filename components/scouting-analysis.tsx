@@ -328,7 +328,7 @@ export function ScoutingAnalysis({ eventKey }: { eventKey: string }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [eventKey]);
 
   useEffect(() => {
     void loadData();
