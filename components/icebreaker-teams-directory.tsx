@@ -7,7 +7,6 @@ import { makeFunctionReference } from "convex/server";
 import { Search, Users } from "lucide-react";
 import type { EventDashboardTeam } from "@/types/frc";
 
-const EVENT_KEY = "2026vaale1";
 const listPitEntries = makeFunctionReference<"query">("pitScouting:listEventEntries");
 
 type PitEntry = {
@@ -16,7 +15,7 @@ type PitEntry = {
   robotPhotoDataUrl?: string;
 };
 
-export function IcebreakerTeamsDirectory({ teams }: { teams: EventDashboardTeam[] }) {
+export function IcebreakerTeamsDirectory({ teams, eventKey }: { teams: EventDashboardTeam[]; eventKey: string }) {
   const [search, setSearch] = useState("");
   const [photos, setPhotos] = useState<Map<number, string>>(new Map());
 
@@ -27,7 +26,7 @@ export function IcebreakerTeamsDirectory({ teams }: { teams: EventDashboardTeam[
         const url = process.env.NEXT_PUBLIC_CONVEX_URL;
         if (!url) return;
         const client = new ConvexHttpClient(url);
-        const entries = await client.query(listPitEntries, { eventKey: EVENT_KEY }) as PitEntry[];
+        const entries = await client.query(listPitEntries, { eventKey }) as PitEntry[];
         if (cancelled) return;
 
         const sorted = [...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -44,7 +43,7 @@ export function IcebreakerTeamsDirectory({ teams }: { teams: EventDashboardTeam[
     }
     void loadPhotos();
     return () => { cancelled = true; };
-  }, []);
+  }, [eventKey]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -80,7 +79,7 @@ export function IcebreakerTeamsDirectory({ teams }: { teams: EventDashboardTeam[
           return (
             <Link
               key={team.teamNumber}
-              href={`/teams/${team.teamNumber}?event=${EVENT_KEY}`}
+              href={`/teams/${team.teamNumber}?event=${eventKey}`}
               className="group overflow-hidden rounded-2xl border border-blue-400/15 bg-[#0d1b2e]/85 transition hover:-translate-y-0.5 hover:border-[#ffd84d]/45 hover:shadow-xl hover:shadow-black/20"
             >
               <div className="relative aspect-[16/9] overflow-hidden bg-[#07111f]">
@@ -115,7 +114,7 @@ export function IcebreakerTeamsDirectory({ teams }: { teams: EventDashboardTeam[
 
       {!filtered.length ? (
         <div className="rounded-2xl border border-dashed border-blue-300/15 px-4 py-10 text-center text-sm text-slate-500">
-          No Icebreaker team matches that search.
+          No team at this event matches that search.
         </div>
       ) : null}
     </div>
