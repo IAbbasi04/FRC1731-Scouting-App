@@ -51,7 +51,6 @@ type MetricDefinition = {
   result: (entries: CloudEntry[]) => MetricResult;
 };
 
-const EVENT_KEY = "2026vaale1";
 const listEventEntries = makeFunctionReference<"query">("analysis:listEventEntries");
 
 function average(values: number[]) {
@@ -135,7 +134,7 @@ function confidenceClass(level: string) {
   return "text-orange-300";
 }
 
-export function ScoutingAnalysis() {
+export function ScoutingAnalysis({ eventKey }: { eventKey: string }) {
   const [entries, setEntries] = useState<CloudEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
@@ -321,7 +320,7 @@ export function ScoutingAnalysis() {
       const url = process.env.NEXT_PUBLIC_CONVEX_URL;
       if (!url) throw new Error("NEXT_PUBLIC_CONVEX_URL is not configured.");
       const client = new ConvexHttpClient(url);
-      const result = await client.query(listEventEntries, { eventKey: EVENT_KEY }) as CloudEntry[];
+      const result = await client.query(listEventEntries, { eventKey: eventKey }) as CloudEntry[];
       setEntries(result);
       setLoaded(true);
     } catch (caught) {
@@ -339,7 +338,7 @@ export function ScoutingAnalysis() {
     <div className="space-y-5">
       <section className="flex flex-col gap-3 rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/80 p-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#ffd84d]">{EVENT_KEY} · {config.gameName}</div>
+          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[#ffd84d]">{eventKey} · {config.gameName}</div>
           <div className="mt-1 text-sm text-slate-400">
             {loaded ? `${teams.length} teams · ${entries.length} scouting reports` : "Loading event scouting data…"}
           </div>
@@ -368,7 +367,7 @@ export function ScoutingAnalysis() {
       {error ? <div className="rounded-xl border border-red-400/20 bg-red-950/20 p-4 text-sm text-red-200">{error}</div> : null}
 
       {loaded && teams.length === 0 ? (
-        <div className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/70 p-6 text-slate-400">No synced scouting entries found for Icebreaker yet.</div>
+        <div className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/70 p-6 text-slate-400">No synced scouting entries found for this event yet.</div>
       ) : null}
 
       {teams.length ? (
