@@ -19,7 +19,7 @@ export function IcebreakerMatchAccess() {
           <h2 className="font-semibold">Match board restricted</h2>
         </div>
         <p className="mt-3 text-sm leading-6 text-slate-400">
-          For the Icebreaker build, the strategy Match board is limited to Ibrahim and Hisham.
+          The strategy Match board is limited to authorized strategy users.
           You are signed in as <span className="font-medium text-white">{session.name}</span>.
         </p>
         <Link
