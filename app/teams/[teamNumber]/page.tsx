@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { TeamTradingCard } from "@/components/team-trading-card";
 import { getEventDashboard } from "@/lib/event-dashboard";
 
-const EVENT_KEY = "2026vaale1";
+const DEFAULT_EVENT_KEY = "2026vaale1";
 
 export default async function TeamEventProfilePage({
   params,
@@ -15,7 +15,7 @@ export default async function TeamEventProfilePage({
   const { teamNumber: rawTeamNumber } = await params;
   const { event } = await searchParams;
   const teamNumber = Number(rawTeamNumber);
-  const eventKey = event?.trim().toLowerCase() || EVENT_KEY;
+  const eventKey = event?.trim().toLowerCase() || DEFAULT_EVENT_KEY;
 
   if (!Number.isFinite(teamNumber)) notFound();
 
@@ -30,7 +30,7 @@ export default async function TeamEventProfilePage({
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link href="/teams" className="text-sm font-semibold text-blue-300 hover:text-[#ffd84d]">← All Icebreaker teams</Link>
+        <Link href="/teams" className="text-sm font-semibold text-blue-300 hover:text-[#ffd84d]">← All event teams</Link>
         <div className="font-mono text-xs text-slate-600">{eventKey}</div>
       </div>
 
