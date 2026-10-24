@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { TeamTradingCard } from "@/components/team-trading-card";
 import { getEventDashboard } from "@/lib/event-dashboard";
 
-const DEFAULT_EVENT_KEY = "2026vaale1";
+const DEFAULT_EVENT_KEY = "2026vagle2";
 
 export default async function TeamEventProfilePage({
   params,
