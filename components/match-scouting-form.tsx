@@ -15,7 +15,7 @@ import type {
 const STORAGE_KEY = "1731.match-scouting.entries.v1";
 const QUEUE_UPDATED_EVENT = "1731:scouting-queue-updated";
 const QUEUE_SYNCED_EVENT = "1731:scouting-queue-synced";
-const DEFAULT_EVENT_KEY = "2026vaale1";
+const DEFAULT_EVENT_KEY = "2026vagle2";
 
 function loadEntries(): StoredScoutingEntry[] {
   try {
@@ -217,7 +217,7 @@ export function MatchScoutingForm() {
         </section>
 
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Event"><input value={eventKey} onChange={(event) => setEventKey(event.target.value)} placeholder="e.g. 2026vaale1" className={`${inputClass} font-mono`} /></Field>
+          <Field label="Event"><input value={eventKey} onChange={(event) => setEventKey(event.target.value)} placeholder="e.g. 2026vagle2" className={`${inputClass} font-mono`} /></Field>
           <Field label="Match"><input type="number" inputMode="numeric" min={1} value={matchNumber} onChange={(event) => setMatchNumber(event.target.value === "" ? "" : numberOrZero(event.target.value))} className={inputClass} /></Field>
           <Field label="Team"><input type="number" inputMode="numeric" min={1} value={teamNumber} onChange={(event) => setTeamNumber(event.target.value === "" ? "" : numberOrZero(event.target.value))} className={inputClass} /></Field>
           <Field label="Alliance"><select value={alliance} onChange={(event) => setAlliance(event.target.value as AllianceColor)} className={inputClass}><option value="red">Red</option><option value="blue">Blue</option></select></Field>
