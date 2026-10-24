@@ -3,7 +3,7 @@ import { IcebreakerTeamsDirectory } from "@/components/icebreaker-teams-director
 import { PageHeader } from "@/components/page-header";
 import { getEventDashboard } from "@/lib/event-dashboard";
 
-const DEFAULT_EVENT_KEY = "2026vaale1";
+const DEFAULT_EVENT_KEY = "2026vagle2";
 
 export const dynamic = "force-dynamic";
 
