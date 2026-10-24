@@ -13,9 +13,8 @@ export default async function TeamEventProfilePage({
   searchParams: Promise<{ event?: string }>;
 }) {
   const { teamNumber: rawTeamNumber } = await params;
-  const { event } = await searchParams;
   const teamNumber = Number(rawTeamNumber);
-  const eventKey = event?.trim().toLowerCase() || DEFAULT_EVENT_KEY;
+  const eventKey = DEFAULT_EVENT_KEY;
 
   if (!Number.isFinite(teamNumber)) notFound();
 
