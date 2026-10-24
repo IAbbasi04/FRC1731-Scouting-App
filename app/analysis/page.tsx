@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/page-header";
 import { ScoutingAnalysis } from "@/components/scouting-analysis";
 
-const DEFAULT_EVENT_KEY = "2026vaale1";
+const DEFAULT_EVENT_KEY = "2026vagle2";
 
 export default async function AnalysisPage({ searchParams }: { searchParams?: Promise<{ event?: string }> }) {
   const params = searchParams ? await searchParams : undefined;
