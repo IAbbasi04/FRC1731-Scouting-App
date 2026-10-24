@@ -6,7 +6,7 @@ import { makeFunctionReference } from "convex/server";
 import { Download, RefreshCw } from "lucide-react";
 import { toPng } from "html-to-image";
 
-const EVENT_KEY = "2026vaale1";
+const EVENT_KEY = "2026vagle2";
 const listEventEntries = makeFunctionReference<"query">("analysis:listEventEntries");
 
 type MatchAlliance = {
@@ -227,10 +227,10 @@ export function MatchStrategyBoard() {
       const eventPayload = await eventResponse.json();
 
       if (!matchesResponse.ok || !Array.isArray(matchesPayload)) {
-        throw new Error(matchesPayload?.error ?? "Could not load Icebreaker matches.");
+        throw new Error(matchesPayload?.error ?? "Could not load Rumble 11 matches.");
       }
       if (!eventResponse.ok || !eventPayload?.teams) {
-        throw new Error(eventPayload?.error ?? "Could not load Icebreaker team data.");
+        throw new Error(eventPayload?.error ?? "Could not load Rumble 11 team data.");
       }
 
       const qualifications = (matchesPayload as EventMatch[])
@@ -261,7 +261,7 @@ export function MatchStrategyBoard() {
       }
 
       if (!qualifications.length) {
-        setMessage("No qualification matches are published for Icebreaker yet.");
+        setMessage("No qualification matches are published for Rumble 11 yet.");
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not load the Match board.");
@@ -397,7 +397,7 @@ export function MatchStrategyBoard() {
         >
           <div className="mb-4 flex items-end justify-between gap-6">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffd84d]">Team 1731 · Chesapeake Robotics Icebreaker</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#ffd84d]">Team 1731 · Rumble 11</div>
               <h2 className="mt-1 text-3xl font-bold text-white">
                 {boardMode === "manual" ? "Manual alliance board" : selectedMatch ? `Qualification ${selectedMatch.match_number}` : "Match strategy board"}
               </h2>
