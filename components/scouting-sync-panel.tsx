@@ -6,6 +6,7 @@ import { isCloudSyncConfigured, syncPendingEntries } from "@/lib/scouting-sync";
 import type { MatchScoutingEntry, StoredScoutingEntry } from "@/types/scouting";
 
 const STORAGE_KEY = "1731.match-scouting.entries.v1";
+const DISPLAY_EVENT_KEY = "2026vagle2";
 const QUEUE_UPDATED_EVENT = "1731:scouting-queue-updated";
 const QUEUE_SYNCED_EVENT = "1731:scouting-queue-synced";
 
@@ -31,7 +32,7 @@ export function ScoutingSyncPanel() {
   }, []);
 
   const modernEntries = useMemo(
-    () => entries.filter((entry): entry is MatchScoutingEntry => entry.schemaVersion === 2),
+    () => entries.filter((entry): entry is MatchScoutingEntry => entry.schemaVersion === 2 && entry.eventKey?.toLowerCase() === DISPLAY_EVENT_KEY),
     [entries],
   );
   const pending = modernEntries.filter((entry) => entry.syncStatus !== "synced");
@@ -137,7 +138,7 @@ export function ScoutingSyncPanel() {
             </span>
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            Entries are saved locally before sync. New or pending entries retry automatically while online and when connectivity returns.
+            Rumble 11 queue status only. Historical records remain stored and may still synchronize in the background.
           </p>
         </div>
         <div className="flex gap-5 text-sm">
