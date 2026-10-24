@@ -96,7 +96,7 @@ export function MatchScoutingForm() {
   }, [config]);
 
   const recentEntries = useMemo(
-    () => [...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 10),
+    () => entries.filter((entry) => entry.eventKey?.toLowerCase() === DEFAULT_EVENT_KEY).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 10),
     [entries],
   );
 
@@ -187,7 +187,7 @@ export function MatchScoutingForm() {
   }
 
   function exportEntries() {
-    const latest = loadEntries();
+    const latest = loadEntries().filter((entry) => entry.eventKey?.toLowerCase() === DEFAULT_EVENT_KEY);
     const blob = new Blob([JSON.stringify(latest, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -217,7 +217,7 @@ export function MatchScoutingForm() {
         </section>
 
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Event"><input value={eventKey} onChange={(event) => setEventKey(event.target.value)} placeholder="e.g. 2026vagle2" className={`${inputClass} font-mono`} /></Field>
+          <Field label="Event"><input value={eventKey} readOnly aria-label="Rumble 11 event key" className={`${inputClass} font-mono`} /></Field>
           <Field label="Match"><input type="number" inputMode="numeric" min={1} value={matchNumber} onChange={(event) => setMatchNumber(event.target.value === "" ? "" : numberOrZero(event.target.value))} className={inputClass} /></Field>
           <Field label="Team"><input type="number" inputMode="numeric" min={1} value={teamNumber} onChange={(event) => setTeamNumber(event.target.value === "" ? "" : numberOrZero(event.target.value))} className={inputClass} /></Field>
           <Field label="Alliance"><select value={alliance} onChange={(event) => setAlliance(event.target.value as AllianceColor)} className={inputClass}><option value="red">Red</option><option value="blue">Blue</option></select></Field>
@@ -299,10 +299,10 @@ export function MatchScoutingForm() {
       <aside className="space-y-4">
         <section className="rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/80 p-4 sm:p-5">
           <div className="flex items-center justify-between gap-3">
-            <div><h2 className="font-semibold text-[#ffd84d]">Offline queue</h2><p className="mt-1 text-xs text-slate-500">Multiple seasons can coexist in the same local queue.</p></div>
-            <div className="text-2xl font-bold text-white">{entries.length}</div>
+            <div><h2 className="font-semibold text-[#ffd84d]">Offline queue</h2><p className="mt-1 text-xs text-slate-500">Only Rumble 11 entries are displayed. Older entries remain saved.</p></div>
+            <div className="text-2xl font-bold text-white">{entries.filter((entry) => entry.eventKey?.toLowerCase() === DEFAULT_EVENT_KEY).length}</div>
           </div>
-          <button type="button" disabled={entries.length === 0} onClick={exportEntries} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-blue-300/20 px-4 py-2 text-sm font-medium text-slate-200 hover:border-[#ffd84d]/50 disabled:opacity-40"><Download size={16} /> Export JSON</button>
+          <button type="button" disabled={!entries.some((entry) => entry.eventKey?.toLowerCase() === DEFAULT_EVENT_KEY)} onClick={exportEntries} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-blue-300/20 px-4 py-2 text-sm font-medium text-slate-200 hover:border-[#ffd84d]/50 disabled:opacity-40"><Download size={16} /> Export JSON</button>
         </section>
 
         <section className="overflow-hidden rounded-2xl border border-blue-400/20 bg-[#0d1b2e]/70">
